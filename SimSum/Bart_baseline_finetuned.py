@@ -1,30 +1,16 @@
 
 
-from functools import lru_cache
-from gc import callbacks
-from lib2to3.pgen2 import token
-from pathlib import Path
-from weakref import ref
-import math
 from pytorch_lightning.loggers import TensorBoardLogger
 from easse.sari import corpus_sari
-from torch.nn import functional as F
-from preprocessor import tokenize, yield_sentence_pair, yield_lines, load_preprocessor, read_lines, \
-    count_line, OUTPUT_DIR, get_complexity_score, safe_division, get_word2rank, remove_stopwords, remove_punctuation
-import Levenshtein
-import argparse
+from preprocessor import yield_lines, read_lines, OUTPUT_DIR
+
 from argparse import ArgumentParser
 import os
 import logging
-import random
-import nltk
+
 from preprocessor import  get_data_filepath
-from summarizer import Summarizer
 
-
-import numpy as np
 import torch
-import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import pytorch_lightning as pl
 from pytorch_lightning.trainer import seed_everything
@@ -47,8 +33,6 @@ class MetricsCallback(pl.Callback):
   def on_validation_end(self, trainer, pl_module):
       self.metrics.append(trainer.callback_metrics)
 
-
-   
 
 class BartBaseLineFineTuned(pl.LightningModule):
     def __init__(self,args):
@@ -144,16 +128,10 @@ class BartBaseLineFineTuned(pl.LightningModule):
                 early_stopping = True,
                 num_return_sequences = 1
             ).to(self.args.device)
-            
-             
-            # final_outputs = []
-            # for beam_output in beam_outputs:
-            
+
             ## Bart:
             sent = self.tokenizer.decode(beam_outputs[0], skip_special_tokens=True, clean_up_tokenization_spaces=True)
-            # if sent.lower() != sentence.lower() and sent not in final_outputs:
-                # final_outputs.append(sent)
-            
+
             return sent
 
         pred_sents = []
@@ -208,33 +186,21 @@ class BartBaseLineFineTuned(pl.LightningModule):
             'frequency': 1
         }]
 
+    ## commenting it as it is already handled by torch
+    ## modify if you want to do modifications
     # def optimizer_step(self, epoch=None, batch_idx=None, optimizer=None, optimizer_idx=None, optimizer_closure=None,
     #                    on_tpu=None, using_native_amp=None, using_lbfgs=None):
     #     optimizer.step(closure=optimizer_closure)
     #
     #     optimizer.zero_grad()
     #     self.lr_scheduler.step()
-    
+
     def save_core_model(self):
       tmp = self.args.model_name + 'core'
       store_path = OUTPUT_DIR / tmp
       self.model.save_pretrained(store_path)
       self.simplifier_tokenizer.save_pretrained(store_path)
 
-
-
-    # def train_dataloader(self):
-        # train_dataset = TrainDataset(dataset=self.args.dataset,
-        #                              tokenizer=self.tokenizer,
-        #                              max_len=self.args.max_seq_length,
-        #                              sample_size=self.args.train_sample_size)
-        #
-        # dataloader = DataLoader(train_dataset,
-        #                         batch_size=self.args.train_batch_size,
-        #                         drop_last=True,
-        #                         shuffle=True,
-        #                         pin_memory=True,
-        #                         num_workers=4)
 
     def train_dataloader(self):
         train_dataset = TrainDataset(
@@ -262,31 +228,6 @@ class BartBaseLineFineTuned(pl.LightningModule):
         return DataLoader(val_dataset,
                           batch_size=self.args.valid_batch_size,
                           num_workers=0)
-
-    # def configure_optimizers(self):
-    #     t_total = (
-    #             (len(self.train_dataloader().dataset) // (self.args.train_batch_size * max(1, self.args.n_gpu)))
-    #             // self.args.gradient_accumulation_steps
-    #             * float(self.args.num_train_epochs)
-    #     )
-    #
-    #     optimizer = AdamW(self.parameters(), lr=self.args.learning_rate)
-    #
-    #     scheduler = get_linear_schedule_with_warmup(
-    #         optimizer,
-    #         num_warmup_steps=self.args.warmup_steps,
-    #         num_training_steps=t_total
-    #     )
-    #
-    #     # Return optimizer and scheduler to PyTorch Lightning
-    #     return {
-    #         "optimizer": optimizer,
-    #         "lr_scheduler": {
-    #             "scheduler": scheduler,
-    #             "interval": "step",  # Update the scheduler per step
-    #             "frequency": 1
-    #         }
-    #     }
 
     @staticmethod
     def add_model_specific_args(parent_parser):
