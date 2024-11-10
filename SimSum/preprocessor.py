@@ -24,7 +24,7 @@ import pickle
 import hashlib
 
 
-nltk.download('stopwords')
+# nltk.download('stopwords')
 from nltk.corpus import stopwords
 import re
 from sacremoses import MosesDetokenizer, MosesTokenizer

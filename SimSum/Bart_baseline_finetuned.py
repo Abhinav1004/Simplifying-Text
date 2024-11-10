@@ -21,7 +21,6 @@ import nltk
 from preprocessor import  get_data_filepath
 from summarizer import Summarizer
 
-nltk.download('punkt')
 
 import numpy as np
 import torch
@@ -178,23 +177,43 @@ class BartBaseLineFineTuned(pl.LightningModule):
         optimizer_grouped_parameters = [
             {
                 "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
-                                "weight_decay": self.args.weight_decay,
+                "weight_decay": self.args.weight_decay,
             },
             {
                 "params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)],
                 "weight_decay": 0.0,
             },
         ]
+
         optimizer = AdamW(optimizer_grouped_parameters, lr=self.args.learning_rate, eps=self.args.adam_epsilon)
         self.opt = optimizer
-        return [optimizer]
 
-    def optimizer_step(self, epoch=None, batch_idx=None, optimizer=None, optimizer_idx=None, optimizer_closure=None,
-                       on_tpu=None, using_native_amp=None, using_lbfgs=None):
-        optimizer.step(closure=optimizer_closure)
+        # Calculate the total training steps
+        t_total = (
+                (
+                            len(self.train_dataloader().dataset) // self.args.train_batch_size) // self.args.gradient_accumulation_steps
+                * float(self.args.num_train_epochs)
+        )
 
-        optimizer.zero_grad()
-        self.lr_scheduler.step()
+        # Initialize scheduler
+        scheduler = get_linear_schedule_with_warmup(
+            optimizer,
+            num_warmup_steps=self.args.warmup_steps,
+            num_training_steps=t_total
+        )
+
+        return [optimizer], [{
+            'scheduler': scheduler,
+            'interval': 'step',
+            'frequency': 1
+        }]
+
+    # def optimizer_step(self, epoch=None, batch_idx=None, optimizer=None, optimizer_idx=None, optimizer_closure=None,
+    #                    on_tpu=None, using_native_amp=None, using_lbfgs=None):
+    #     optimizer.step(closure=optimizer_closure)
+    #
+    #     optimizer.zero_grad()
+    #     self.lr_scheduler.step()
     
     def save_core_model(self):
       tmp = self.args.model_name + 'core'
@@ -204,27 +223,36 @@ class BartBaseLineFineTuned(pl.LightningModule):
 
 
 
-    def train_dataloader(self):
-        train_dataset = TrainDataset(dataset=self.args.dataset,
-                                     tokenizer=self.tokenizer,
-                                     max_len=self.args.max_seq_length,
-                                     sample_size=self.args.train_sample_size)
+    # def train_dataloader(self):
+        # train_dataset = TrainDataset(dataset=self.args.dataset,
+        #                              tokenizer=self.tokenizer,
+        #                              max_len=self.args.max_seq_length,
+        #                              sample_size=self.args.train_sample_size)
+        #
+        # dataloader = DataLoader(train_dataset,
+        #                         batch_size=self.args.train_batch_size,
+        #                         drop_last=True,
+        #                         shuffle=True,
+        #                         pin_memory=True,
+        #                         num_workers=4)
 
-        dataloader = DataLoader(train_dataset,
-                                batch_size=self.args.train_batch_size,
-                                drop_last=True,
-                                shuffle=True,
-                                pin_memory=True,
-                                num_workers=4)
-        t_total = ((len(dataloader.dataset) // (self.args.train_batch_size * max(1, self.args.n_gpu)))
-                   // self.args.gradient_accumulation_steps
-                   * float(self.args.num_train_epochs)
-                   )
-        scheduler = get_linear_schedule_with_warmup(
-            self.opt, num_warmup_steps=self.args.warmup_steps, num_training_steps=t_total
+    def train_dataloader(self):
+        train_dataset = TrainDataset(
+              dataset=self.args.dataset,
+              tokenizer=self.tokenizer,
+              max_len=self.args.max_seq_length,
+              sample_size=self.args.train_sample_size
         )
-        self.lr_scheduler = scheduler
+        dataloader = DataLoader(
+              train_dataset,
+              batch_size=self.args.train_batch_size,
+              drop_last=True,
+              shuffle=True,
+              pin_memory=True,
+              num_workers=0
+        )
         return dataloader
+
 
     def val_dataloader(self):
         val_dataset = ValDataset(dataset=self.args.dataset,
@@ -233,7 +261,33 @@ class BartBaseLineFineTuned(pl.LightningModule):
                                  sample_size=self.args.valid_sample_size)
         return DataLoader(val_dataset,
                           batch_size=self.args.valid_batch_size,
-                          num_workers=4)
+                          num_workers=0)
+
+    # def configure_optimizers(self):
+    #     t_total = (
+    #             (len(self.train_dataloader().dataset) // (self.args.train_batch_size * max(1, self.args.n_gpu)))
+    #             // self.args.gradient_accumulation_steps
+    #             * float(self.args.num_train_epochs)
+    #     )
+    #
+    #     optimizer = AdamW(self.parameters(), lr=self.args.learning_rate)
+    #
+    #     scheduler = get_linear_schedule_with_warmup(
+    #         optimizer,
+    #         num_warmup_steps=self.args.warmup_steps,
+    #         num_training_steps=t_total
+    #     )
+    #
+    #     # Return optimizer and scheduler to PyTorch Lightning
+    #     return {
+    #         "optimizer": optimizer,
+    #         "lr_scheduler": {
+    #             "scheduler": scheduler,
+    #             "interval": "step",  # Update the scheduler per step
+    #             "frequency": 1
+    #         }
+    #     }
+
     @staticmethod
     def add_model_specific_args(parent_parser):
       p = ArgumentParser(parents=[parent_parser],add_help = False)
@@ -253,7 +307,7 @@ class BartBaseLineFineTuned(pl.LightningModule):
       p.add_argument('-nbSVS','--nb_sanity_val_steps',default = -1)
       p.add_argument('-TrainSampleSize','--train_sample_size', default=1)
       p.add_argument('-ValidSampleSize','--valid_sample_size', default=1)
-      p.add_argument('-device','--device', default = 'cuda')
+      p.add_argument('-device','--device', default = 'cpu')
       #p.add_argument('-NumBeams','--num_beams', default=8)
       return p
 
@@ -384,7 +438,7 @@ def train(args):
     metrics_callback = MetricsCallback()
     train_params = dict(
         accumulate_grad_batches=args.gradient_accumulation_steps,
-        gpus=args.n_gpu,
+        # n_gpu=args.n_gpu,
         max_epochs=args.num_train_epochs,
         # early_stop_callback=False,
         # gradient_clip_val=args.max_grad_norm,
@@ -402,6 +456,7 @@ def train(args):
 
     print("Initialize model")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Device used {device}")
     model = BartBaseLineFineTuned(args)
  
     model.args.dataset = args.dataset
