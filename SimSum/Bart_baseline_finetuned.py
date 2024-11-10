@@ -207,7 +207,7 @@ class BartBaseLineFineTuned(pl.LightningModule):
               dataset=self.args.dataset,
               tokenizer=self.tokenizer,
               max_len=self.args.max_seq_length,
-              sample_size=self.args.train_sample_size
+              sample_size=self.args.train_sample_size,
         )
         dataloader = DataLoader(
               train_dataset,
@@ -215,7 +215,8 @@ class BartBaseLineFineTuned(pl.LightningModule):
               drop_last=True,
               shuffle=True,
               pin_memory=True,
-              num_workers=0
+            persistent_workers=True,
+              num_workers=9
         )
         return dataloader
 
@@ -226,8 +227,8 @@ class BartBaseLineFineTuned(pl.LightningModule):
                                  max_len=self.args.max_seq_length,
                                  sample_size=self.args.valid_sample_size)
         return DataLoader(val_dataset,
-                          batch_size=self.args.valid_batch_size,
-                          num_workers=0)
+                          batch_size=self.args.valid_batch_size,persistent_workers=True,
+                          num_workers=9)
 
     @staticmethod
     def add_model_specific_args(parent_parser):
@@ -246,8 +247,8 @@ class BartBaseLineFineTuned(pl.LightningModule):
       p.add_argument('-GradAccuSteps','--gradient_accumulation_steps', default=1)
       p.add_argument('-GPUs','--n_gpu',default=torch.cuda.device_count())
       p.add_argument('-nbSVS','--nb_sanity_val_steps',default = -1)
-      p.add_argument('-TrainSampleSize','--train_sample_size', default=1)
-      p.add_argument('-ValidSampleSize','--valid_sample_size', default=1)
+      p.add_argument('-TrainSampleSize','--train_sample_size', default=0.01)
+      p.add_argument('-ValidSampleSize','--valid_sample_size', default=0.01)
       p.add_argument('-device','--device', default = 'cpu')
       #p.add_argument('-NumBeams','--num_beams', default=8)
       return p
@@ -392,7 +393,6 @@ def train(args):
         num_sanity_val_steps=0,  # skip sanity check to save time for debugging purpose
         # plugins='ddp_sharded',
         #progress_bar_refresh_rate=1,
-
     )
 
     print("Initialize model")
@@ -419,5 +419,5 @@ def train(args):
 
     print("training finished")
 
-    # print("Saving model")
-    # model.model.save_pretrained(args.output_dir)
+    print("Saving model")
+    model.model.save_pretrained(args.output_dir)
