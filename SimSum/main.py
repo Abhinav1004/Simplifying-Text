@@ -2,26 +2,16 @@
 Main Program: 
 > python main.py
 '''
-# -- fix path --
 
-import torch
-# torch.multiprocessing.set_start_method('forkserver', force=True)
 from pathlib import Path
 import sys
 sys.path.append(str(Path(__file__).resolve().parent))
-# -- end fix path --
 
 from preprocessor import WIKI_DOC, D_WIKI, EXP_DIR
 import time
 import json
 
-#from contextlib import contextmanager
-import argparse
-
 from argparse import ArgumentParser
-import pytorch_lightning as pl
-from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from optuna.integration import PyTorchLightningPruningCallback
 
 #from T5_2 import SumSim, train
 #from Bart2 import SumSim, train
@@ -30,7 +20,6 @@ from Bart_baseline_finetuned import BartBaseLineFineTuned, train
 
 
 def parse_arguments():
-    #p = SumSim.add_model_specific_args(p)
     p = ArgumentParser()
 
     p.add_argument('--seed', type=int, default=42, help='randomization seed')
@@ -51,13 +40,6 @@ def parse_arguments():
     args, _ = p.parse_known_args()
     return args
 
-# class MetricsCallback(pl.Callback):
-#   def __init__(self):
-#     super().__init__()
-#     self.metrics = []
-  
-#   def on_validation_end(self, trainer, pl_module):
-#       self.metrics.append(trainer.callback_metrics)
 
 # Create experiment directory
 def get_experiment_dir(create_dir=False):
@@ -73,8 +55,6 @@ def log_params(filepath, kwargs):
         kwargs_str[key] = str(kwargs[key])
     json.dump(kwargs_str, filepath.open('w'), indent=4)
 
-
-
 def run_training(args, dataset):
 
     args.output_dir = get_experiment_dir(create_dir=True)
@@ -87,7 +67,8 @@ def run_training(args, dataset):
 
 
 
-dataset = WIKI_DOC
-args = parse_arguments()
-run_training(args, dataset)
+if __name__=="__main__":
+    dataset = WIKI_DOC
+    args = parse_arguments()
+    run_training(args, dataset)
 
