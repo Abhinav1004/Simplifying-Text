@@ -5,7 +5,7 @@ Main Program:
 # -- fix path --
 
 import torch
-#torch.multiprocessing.set_start_method('forkserver', force=True)
+# torch.multiprocessing.set_start_method('forkserver', force=True)
 from pathlib import Path
 import sys
 sys.path.append(str(Path(__file__).resolve().parent))
@@ -30,15 +30,25 @@ from Bart_baseline_finetuned import BartBaseLineFineTuned, train
 
 
 def parse_arguments():
+    #p = SumSim.add_model_specific_args(p)
     p = ArgumentParser()
-                  
+
     p.add_argument('--seed', type=int, default=42, help='randomization seed')
 
-    #p = SumSim.add_model_specific_args(p)
+    # Add your model-specific arguments
     p = BartBaseLineFineTuned.add_model_specific_args(p)
-    #p = T5BaseLineFineTuned.add_model_specific_args(p)
-    p = pl.Trainer.add_argparse_args(p)
-    args,_ = p.parse_known_args()
+    # p = T5BaseLineFineTuned.add_model_specific_args(p)
+
+    # Manually add the PyTorch Lightning Trainer arguments
+    p.add_argument('--max_epochs', type=int, default=10, help='Max number of training epochs')
+    p.add_argument('--gpus', type=int, default=1, help='Number of GPUs to use')
+    p.add_argument('--precision', type=int, default=32, help='Precision for training')
+    p.add_argument('--gradient_clip_val', type=float, default=0.0, help='Gradient clipping value')
+    p.add_argument('--accumulate_grad_batches', type=int, default=1, help='Accumulate gradients over N batches')
+    p.add_argument('--num_nodes', type=int, default=1, help='Number of nodes for distributed training')
+    p.add_argument('--accelerator', type=str, default='cpu', help='Type of accelerator (cpu, gpu, tpu, etc.)')
+
+    args, _ = p.parse_known_args()
     return args
 
 # class MetricsCallback(pl.Callback):
