@@ -87,20 +87,18 @@ class BartBaseLineFineTuned(pl.LightningModule):
             loss = outputs.loss
 
             
-            self.log('train_loss', loss, on_step=True, prog_bar=True, logger=True)
-            # print(loss)
+            self.log('Train_loss', loss, on_step=True, prog_bar=True, logger=True)
             return loss
         else:
             loss = outputs.loss
-            self.log('train_loss', loss, on_step=True, prog_bar=True, logger=True)
-            #print(loss)
+            self.log('Train_loss', loss, on_step=True, prog_bar=True, logger=True)
             return loss
 
 
     def validation_step(self, batch, batch_idx):
         loss = self.sari_validation_step(batch)
         # loss = self._step(batch)
-        print("Val_loss", loss)
+        print("\nVal_loss", loss)
         logs = {"val_loss": loss}
 
         self.log('val_loss', loss, batch_size = self.args.valid_batch_size)
@@ -145,7 +143,7 @@ class BartBaseLineFineTuned(pl.LightningModule):
         score = corpus_sari(batch["source"], pred_sents, [batch["targets"]])
 
 
-        print("Sari score: ", score)
+        print("\nSari score: ", score)
 
         return 1 - score / 100
 
@@ -188,15 +186,6 @@ class BartBaseLineFineTuned(pl.LightningModule):
             'frequency': 1
         }]
 
-    ## commenting it as it is already handled by torch
-    ## modify if you want to do modifications
-    # def optimizer_step(self, epoch=None, batch_idx=None, optimizer=None, optimizer_idx=None, optimizer_closure=None,
-    #                    on_tpu=None, using_native_amp=None, using_lbfgs=None):
-    #     optimizer.step(closure=optimizer_closure)
-    #
-    #     optimizer.zero_grad()
-    #     self.lr_scheduler.step()
-
     def save_core_model(self):
       tmp = self.args.model_name + 'core'
       store_path = OUTPUT_DIR / tmp
@@ -236,10 +225,10 @@ class BartBaseLineFineTuned(pl.LightningModule):
       p = ArgumentParser(parents=[parent_parser],add_help = False)
       # facebook/bart-base Yale-LILY/brio-cnndm-uncased ainize/bart-base-cnn
       p.add_argument('-Summarizer','--sum_model', default='Yale-LILY/brio-cnndm-uncased')
-      p.add_argument('-TrainBS','--train_batch_size',type=int, default=1)
-      p.add_argument('-ValidBS','--valid_batch_size',type=int, default=1)
+      p.add_argument('-TrainBS','--train_batch_size',type=int, default=8)
+      p.add_argument('-ValidBS','--valid_batch_size',type=int, default=8)
       p.add_argument('-lr','--learning_rate',type=float, default=1e-5)
-      p.add_argument('-MaxSeqLen','--max_seq_length',type=int, default=64)
+      p.add_argument('-MaxSeqLen','--max_seq_length',type=int, default=256)
       p.add_argument('-AdamEps','--adam_epsilon', default=1e-8)
       p.add_argument('-WeightDecay','--weight_decay', default = 0.0001)
       p.add_argument('-WarmupSteps','--warmup_steps',default=5)
@@ -248,8 +237,8 @@ class BartBaseLineFineTuned(pl.LightningModule):
       p.add_argument('-GradAccuSteps','--gradient_accumulation_steps', default=1)
       p.add_argument('-GPUs','--n_gpu',default=torch.cuda.device_count())
       p.add_argument('-nbSVS','--nb_sanity_val_steps',default = -1)
-      p.add_argument('-TrainSampleSize','--train_sample_size', default=0.001)
-      p.add_argument('-ValidSampleSize','--valid_sample_size', default=0.001)
+      p.add_argument('-TrainSampleSize','--train_sample_size', default=0.01)
+      p.add_argument('-ValidSampleSize','--valid_sample_size', default=0.01)
       p.add_argument('-device','--device', default = 'cpu')
       #p.add_argument('-NumBeams','--num_beams', default=8)
       return p
