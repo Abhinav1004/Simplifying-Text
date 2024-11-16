@@ -68,7 +68,7 @@ def run_training(args, dataset):
 
 
 if __name__=="__main__":
-    dataset = WIKI_DOC
+    dataset = D_WIKI
     args = parse_arguments()
     run_training(args, dataset)
 
