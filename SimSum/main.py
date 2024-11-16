@@ -31,7 +31,7 @@ def parse_arguments():
     # Manually add the PyTorch Lightning Trainer arguments
     p.add_argument('--max_epochs', type=int, default=10, help='Max number of training epochs')
     p.add_argument('--gpus', type=int, default=1, help='Number of GPUs to use')
-    p.add_argument('--precision', type=int, default=32, help='Precision for training')
+    p.add_argument('--precision', type=int, default=8, help='Precision for training')
     p.add_argument('--gradient_clip_val', type=float, default=0.0, help='Gradient clipping value')
     p.add_argument('--accumulate_grad_batches', type=int, default=1, help='Accumulate gradients over N batches')
     p.add_argument('--num_nodes', type=int, default=1, help='Number of nodes for distributed training')
