@@ -16,11 +16,13 @@ import pytorch_lightning as pl
 from pytorch_lightning.trainer import seed_everything
 from transformers import (
     AdamW,
-    T5ForConditionalGeneration,
-    T5TokenizerFast,
-    BertTokenizer, BertForPreTraining,
-    BartForConditionalGeneration, BartTokenizer,pipeline,BartTokenizerFast, BartModel, PreTrainedTokenizerFast,
-    get_linear_schedule_with_warmup, AutoConfig, AutoModel
+    #T5ForConditionalGeneration,
+    #T5TokenizerFast,
+    #BertTokenizer, BertForPreTraining,
+    BartForConditionalGeneration, BartTokenizer,
+    #pipeline,BartTokenizerFast, BartModel, PreTrainedTokenizerFast,
+    get_linear_schedule_with_warmup, 
+    #AutoConfig, AutoModel
 )
 
 #BERT_Sum = Summarizer(model='distilbert-base-uncased')
@@ -70,7 +72,7 @@ class BartBaseLineFineTuned(pl.LightningModule):
         labels = batch['target_ids']
         labels[labels[:,:] == self.tokenizer.pad_token_id] = -100
         # zero the gradient buffers of all parameters
-        self.opt.zero_grad()
+        # self.opt.zero_grad()
         # forward pass
         outputs = self(
             input_ids = batch["source_ids"],
@@ -215,8 +217,7 @@ class BartBaseLineFineTuned(pl.LightningModule):
               drop_last=True,
               shuffle=True,
               pin_memory=True,
-            persistent_workers=True,
-              num_workers=9
+              num_workers=0
         )
         return dataloader
 
@@ -227,28 +228,28 @@ class BartBaseLineFineTuned(pl.LightningModule):
                                  max_len=self.args.max_seq_length,
                                  sample_size=self.args.valid_sample_size)
         return DataLoader(val_dataset,
-                          batch_size=self.args.valid_batch_size,persistent_workers=True,
-                          num_workers=9)
+                          batch_size=self.args.valid_batch_size,
+                          num_workers=0)
 
     @staticmethod
     def add_model_specific_args(parent_parser):
       p = ArgumentParser(parents=[parent_parser],add_help = False)
       # facebook/bart-base Yale-LILY/brio-cnndm-uncased ainize/bart-base-cnn
       p.add_argument('-Summarizer','--sum_model', default='Yale-LILY/brio-cnndm-uncased')
-      p.add_argument('-TrainBS','--train_batch_size',type=int, default=6)
-      p.add_argument('-ValidBS','--valid_batch_size',type=int, default=6)
+      p.add_argument('-TrainBS','--train_batch_size',type=int, default=1)
+      p.add_argument('-ValidBS','--valid_batch_size',type=int, default=1)
       p.add_argument('-lr','--learning_rate',type=float, default=1e-5)
-      p.add_argument('-MaxSeqLen','--max_seq_length',type=int, default=256)
+      p.add_argument('-MaxSeqLen','--max_seq_length',type=int, default=64)
       p.add_argument('-AdamEps','--adam_epsilon', default=1e-8)
       p.add_argument('-WeightDecay','--weight_decay', default = 0.0001)
       p.add_argument('-WarmupSteps','--warmup_steps',default=5)
-      p.add_argument('-NumEpoch','--num_train_epochs',default=7)
+      p.add_argument('-NumEpoch','--num_train_epochs',default=10)
       p.add_argument('-CosLoss','--custom_loss', default=False)
       p.add_argument('-GradAccuSteps','--gradient_accumulation_steps', default=1)
       p.add_argument('-GPUs','--n_gpu',default=torch.cuda.device_count())
       p.add_argument('-nbSVS','--nb_sanity_val_steps',default = -1)
-      p.add_argument('-TrainSampleSize','--train_sample_size', default=0.01)
-      p.add_argument('-ValidSampleSize','--valid_sample_size', default=0.01)
+      p.add_argument('-TrainSampleSize','--train_sample_size', default=0.001)
+      p.add_argument('-ValidSampleSize','--valid_sample_size', default=0.001)
       p.add_argument('-device','--device', default = 'cpu')
       #p.add_argument('-NumBeams','--num_beams', default=8)
       return p
