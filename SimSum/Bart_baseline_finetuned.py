@@ -1,161 +1,213 @@
-
-
-from pytorch_lightning.loggers import TensorBoardLogger
-from easse.sari import corpus_sari
-from preprocessor import yield_lines, read_lines, OUTPUT_DIR
-
-from argparse import ArgumentParser
 import os
 import logging
-
-from preprocessor import  get_data_filepath
-
 import torch
+from pytorch_lightning.loggers import TensorBoardLogger
+from easse.sari import corpus_sari
+from preprocessor import yield_lines, read_lines
+from preprocessor import  get_data_filepath
 from torch.utils.data import Dataset, DataLoader
 import pytorch_lightning as pl
 from pytorch_lightning.trainer import seed_everything
 from transformers import (
     AdamW,
-    #T5ForConditionalGeneration,
-    #T5TokenizerFast,
-    #BertTokenizer, BertForPreTraining,
     BartForConditionalGeneration, BartTokenizer,
-    #pipeline,BartTokenizerFast, BartModel, PreTrainedTokenizerFast,
-    get_linear_schedule_with_warmup, 
-    #AutoConfig, AutoModel
+    get_linear_schedule_with_warmup,
 )
 
-#BERT_Sum = Summarizer(model='distilbert-base-uncased')
-
-class MetricsCallback(pl.Callback):
-  def __init__(self):
-    super().__init__()
-    self.metrics = []
-  
-  def on_validation_end(self, trainer, pl_module):
-      self.metrics.append(trainer.callback_metrics)
-
-
 class BartBaseLineFineTuned(pl.LightningModule):
-    def __init__(self,args):
+    """
+    A PyTorch Lightning module for fine-tuning a BART model for sequence-to-sequence tasks like summarization.
+
+    Args:
+        model_name (str): Pre-trained BART model to fine-tune (e.g., 'facebook/bart-large-cnn').
+        train_batch_size (int): Batch size for training.
+        valid_batch_size (int): Batch size for validation.
+        learning_rate (float): Learning rate for the optimizer.
+        max_seq_length (int): Maximum sequence length for input text.
+        adam_epsilon (float): Epsilon value for Adam optimizer.
+        weight_decay (float): Weight decay for optimizer.
+        warmup_steps (int): Number of warmup steps for learning rate scheduler.
+        num_train_epochs (int): Number of training epochs.
+        custom_loss (bool): Whether to use a custom loss function.
+        gradient_accumulation_steps (int): Number of gradient accumulation steps.
+        train_sample_size (float): Sample size for training dataset.
+        valid_sample_size (float): Sample size for validation dataset.
+        device (str): The device to run the model on ('cpu', 'cuda', 'mps').
+        dataset (Dataset): Dataset for training and validation.
+    """
+
+    def __init__(self,
+                 training_parameters,
+                 model_name='Yale-LILY/brio-cnndm-uncased',
+                 train_batch_size=4,
+                 valid_batch_size=4,
+                 learning_rate=1e-5,
+                 max_seq_length=256,
+                 adam_epsilon=1e-8,
+                 weight_decay=0.0001,
+                 warmup_steps=5,
+                 num_train_epochs=10,
+                 custom_loss=False,
+                 gradient_accumulation_steps=1,
+                 train_sample_size=0.01,
+                 valid_sample_size=0.01,
+                 device='mps', dataset=None):
         super(BartBaseLineFineTuned, self).__init__()
-        self.args = args
+
+        # Store hyperparameters
         self.save_hyperparameters()
-        
 
-        self.model = BartForConditionalGeneration.from_pretrained(self.args.sum_model)
-        self.model = self.model.to(self.args.device)
-        self.tokenizer = BartTokenizer.from_pretrained(self.args.sum_model)
-        
+        # Initialize the BART model and tokenizer
+        self.training_parameters = training_parameters
+        print("Training Parameters ",self.training_parameters)
+        self.model = BartForConditionalGeneration.from_pretrained(model_name)
+        self.model = self.model.to(device)
+        self.tokenizer = BartTokenizer.from_pretrained(model_name)
 
+        self.train_batch_size = train_batch_size
+        self.valid_batch_size = valid_batch_size
+        self.learning_rate = learning_rate
+        self.max_seq_length = max_seq_length
+        self.adam_epsilon = adam_epsilon
+        self.weight_decay = weight_decay
+        self.warmup_steps = warmup_steps
+        self.num_train_epochs = num_train_epochs
+        self.custom_loss = custom_loss
+        self.gradient_accumulation_steps = gradient_accumulation_steps
+        self.train_sample_size = train_sample_size
+        self.valid_sample_size = valid_sample_size
+        self.device_name = device
+
+        self.dataset = self.training_parameters['dataset']
+
+
+        self.core_model_path = self.model_name + 'core'
+        self.model_store_path = self.output_dir / self.core_model_path
 
     def is_logger(self):
+        """
+        Returns True if this is the first rank (for distributed training), False otherwise.
+        """
         return self.trainer.global_rank <= 0
 
-    def forward(self, input_ids, 
-    attention_mask = None,
-    decoder_input_ids = None,
-    decoder_attention_mask = None, labels = None):
-        
-        outputs = self.model(
-            input_ids = input_ids,
-            attention_mask = attention_mask,
-            decoder_input_ids = decoder_input_ids,
-            decoder_attention_mask =  decoder_attention_mask,
-            labels = labels
-        )
+    def forward(self, input_ids, attention_mask=None, decoder_input_ids=None,
+                decoder_attention_mask=None, labels=None):
+        """
+        Defines the forward pass of the model.
 
-        return outputs
+        Args:
+            input_ids (tensor): Input tensor containing tokenized input IDs.
+            attention_mask (tensor): Attention mask for the input.
+            decoder_input_ids (tensor): Decoder input IDs for sequence generation.
+            decoder_attention_mask (tensor): Attention mask for the decoder.
+            labels (tensor): Target labels for training.
+
+        Returns:
+            ModelOutput: Model's output, including loss if labels are provided.
+        """
+        return self.model(input_ids=input_ids,
+                          attention_mask=attention_mask,
+                          decoder_input_ids=decoder_input_ids,
+                          decoder_attention_mask=decoder_attention_mask,
+                          labels=labels)
 
     def training_step(self, batch, batch_idx):
+        """
+        Performs a training step, computes loss, and logs the results.
+
+        Args:
+            batch (dict): Batch of training data.
+            batch_idx (int): Index of the current batch.
+
+        Returns:
+            Tensor: Loss value for the current batch.
+        """
         source = batch["source"]
         labels = batch['target_ids']
-        labels[labels[:,:] == self.tokenizer.pad_token_id] = -100
-        # zero the gradient buffers of all parameters
-        # self.opt.zero_grad()
-        # forward pass
-        outputs = self(
-            input_ids = batch["source_ids"],
-            attention_mask = batch["source_mask"],
-            labels = labels,
-            decoder_attention_mask = batch["target_mask"]
-            
-        )
 
-        if self.args.custom_loss:
+        # Ignore padding tokens in loss calculation
+        labels[labels[:, :] == self.tokenizer.pad_token_id] = -100
 
-            loss = outputs.loss
+        outputs = self(input_ids=batch["source_ids"],
+                       attention_mask=batch["source_mask"],
+                       labels=labels,
+                       decoder_attention_mask=batch["target_mask"])
 
-            
-            self.log('Train_loss', loss, on_step=True, prog_bar=True, logger=True)
-            return loss
-        else:
-            loss = outputs.loss
-            self.log('Train_loss', loss, on_step=True, prog_bar=True, logger=True)
-            return loss
-
+        loss = outputs.loss
+        self.log('train_loss', loss, on_step=True, prog_bar=True, logger=True)
+        return loss
 
     def validation_step(self, batch, batch_idx):
-        loss = self.sari_validation_step(batch)
-        # loss = self._step(batch)
-        print("\nVal_loss", loss)
-        logs = {"val_loss": loss}
+        """
+        Performs a validation step, computes loss, and logs the results.
 
-        self.log('val_loss', loss, batch_size = self.args.valid_batch_size)
-        return torch.tensor(loss, dtype=float)
+        Args:
+            batch (dict): Batch of validation data.
+            batch_idx (int): Index of the current batch.
+
+        Returns:
+            Tensor: Loss value for the current batch.
+        """
+        loss = self.sari_validation_step(batch)
+        self.log('val_loss', loss, batch_size=self.valid_batch_size)
+        return loss
 
     def sari_validation_step(self, batch):
+        """
+        Calculates the SARI score (Summarization Accuracy with Respect to ROUGE) for the validation batch.
+
+        Args:
+            batch (dict): Batch of validation data.
+
+        Returns:
+            float: SARI score for the batch.
+        """
+
         def generate(sentence):
-            text = sentence
             encoding = self.tokenizer(
-            [text],
-            max_length = 512,
-            truncation = True,
-            padding = 'max_length',
-            return_tensors = 'pt'
-        )
-            input_ids = encoding['input_ids'].to(self.args.device)
-            attention_mask = encoding['attention_mask'].to(self.args.device)
-            
+                [sentence],
+                max_length=self.max_seq_length,
+                truncation=True,
+                padding='max_length',
+                return_tensors='pt'
+            ).to(self.device)
+
+            input_ids = encoding['input_ids']
+            attention_mask = encoding['attention_mask']
+
             beam_outputs = self.model.generate(
-                input_ids = input_ids,
-                attention_mask = attention_mask,
-                do_sample = True,
-                max_length = 256,
-                num_beams = 5,
-                top_k = 120,
-                top_p = 0.95,
-                early_stopping = True,
-                num_return_sequences = 1
-            ).to(self.args.device)
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                do_sample=True,
+                max_length=256,
+                num_beams=5,
+                top_k=120,
+                top_p=0.95,
+                early_stopping=True,
+                num_return_sequences=1
+            ).to(self.device)
 
-            ## Bart:
-            sent = self.tokenizer.decode(beam_outputs[0], skip_special_tokens=True, clean_up_tokenization_spaces=True)
+            return self.tokenizer.decode(beam_outputs[0], skip_special_tokens=True, clean_up_tokenization_spaces=True)
 
-            return sent
-
-        pred_sents = []
-        for source in batch["source"]:
-            pred_sent = generate(source)
-            pred_sents.append(pred_sent)
-
-
+        pred_sents = [generate(source) for source in batch["source"]]
         score = corpus_sari(batch["source"], pred_sents, [batch["targets"]])
 
-
-        print("\nSari score: ", score)
-
+        print("\nSARI score: ", score)
         return 1 - score / 100
 
     def configure_optimizers(self):
-        "Prepare optimizer and schedule (linear warmup and decay)"
+        """
+        Configures the optimizer and learning rate scheduler.
 
+        Returns:
+            list: A list containing the optimizer and scheduler.
+        """
         model = self.model
         no_decay = ["bias", "LayerNorm.weight"]
         optimizer_grouped_parameters = [
             {
                 "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
-                "weight_decay": self.args.weight_decay,
+                "weight_decay": self.weight_decay,
             },
             {
                 "params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)],
@@ -163,85 +215,71 @@ class BartBaseLineFineTuned(pl.LightningModule):
             },
         ]
 
-        optimizer = AdamW(optimizer_grouped_parameters, lr=self.args.learning_rate, eps=self.args.adam_epsilon)
-        self.opt = optimizer
+        optimizer = AdamW(optimizer_grouped_parameters, lr=self.learning_rate, eps=self.adam_epsilon)
 
         # Calculate the total training steps
         t_total = (
                 (
-                            len(self.train_dataloader().dataset) // self.args.train_batch_size) // self.args.gradient_accumulation_steps
-                * float(self.args.num_train_epochs)
+                        len(self.train_dataloader().dataset) // self.train_batch_size
+                ) // self.gradient_accumulation_steps
+                * float(self.num_train_epochs)
         )
 
-        # Initialize scheduler
         scheduler = get_linear_schedule_with_warmup(
             optimizer,
-            num_warmup_steps=self.args.warmup_steps,
+            num_warmup_steps=self.warmup_steps,
             num_training_steps=t_total
         )
 
-        return [optimizer], [{
-            'scheduler': scheduler,
-            'interval': 'step',
-            'frequency': 1
-        }]
+        return [optimizer], [{'scheduler': scheduler, 'interval': 'step', 'frequency': 1}]
 
     def save_core_model(self):
-      tmp = self.args.model_name + 'core'
-      store_path = OUTPUT_DIR / tmp
-      self.model.save_pretrained(store_path)
-      self.simplifier_tokenizer.save_pretrained(store_path)
-
+        """
+        Saves the fine-tuned model and tokenizer to the specified directory.
+        """
+        self.model.save_pretrained(self.model_store_path)
+        self.tokenizer.save_pretrained(self.model_store_path)
 
     def train_dataloader(self):
+        """
+        Returns the training DataLoader.
+
+        Returns:
+            DataLoader: The training DataLoader.
+        """
         train_dataset = TrainDataset(
-              dataset=self.args.dataset,
-              tokenizer=self.tokenizer,
-              max_len=self.args.max_seq_length,
-              sample_size=self.args.train_sample_size,
+            dataset=self.dataset,
+            tokenizer=self.tokenizer,
+            max_len=self.max_seq_length,
+            sample_size=self.train_sample_size,
         )
         dataloader = DataLoader(
-              train_dataset,
-              batch_size=self.args.train_batch_size,
-              drop_last=True,
-              shuffle=True,
-              pin_memory=True,
-              num_workers=0
+            train_dataset,
+            batch_size=self.train_batch_size,
+            drop_last=True,
+            shuffle=True,
+            pin_memory=True,
+            num_workers=0
         )
         return dataloader
 
-
     def val_dataloader(self):
-        val_dataset = ValDataset(dataset=self.args.dataset,
-                                 tokenizer=self.tokenizer,
-                                 max_len=self.args.max_seq_length,
-                                 sample_size=self.args.valid_sample_size)
-        return DataLoader(val_dataset,
-                          batch_size=self.args.valid_batch_size,
-                          num_workers=0)
+        """
+        Returns the validation DataLoader.
 
-    @staticmethod
-    def add_model_specific_args(parent_parser):
-      p = ArgumentParser(parents=[parent_parser],add_help = False)
-      # facebook/bart-base Yale-LILY/brio-cnndm-uncased ainize/bart-base-cnn
-      p.add_argument('-Summarizer','--sum_model', default='Yale-LILY/brio-cnndm-uncased')
-      p.add_argument('-TrainBS','--train_batch_size',type=int, default=4)
-      p.add_argument('-ValidBS','--valid_batch_size',type=int, default=4)
-      p.add_argument('-lr','--learning_rate',type=float, default=1e-5)
-      p.add_argument('-MaxSeqLen','--max_seq_length',type=int, default=256)
-      p.add_argument('-AdamEps','--adam_epsilon', default=1e-8)
-      p.add_argument('-WeightDecay','--weight_decay', default = 0.0001)
-      p.add_argument('-WarmupSteps','--warmup_steps',default=5)
-      p.add_argument('-NumEpoch','--num_train_epochs',default=10)
-      p.add_argument('-CosLoss','--custom_loss', default=False)
-      p.add_argument('-GradAccuSteps','--gradient_accumulation_steps', default=1)
-      p.add_argument('-GPUs','--n_gpu',default=torch.cuda.device_count())
-      p.add_argument('-nbSVS','--nb_sanity_val_steps',default = -1)
-      p.add_argument('-TrainSampleSize','--train_sample_size', default=0.01)
-      p.add_argument('-ValidSampleSize','--valid_sample_size', default=0.01)
-      p.add_argument('-device','--device', default = 'mps')
-      #p.add_argument('-NumBeams','--num_beams', default=8)
-      return p
+        Returns:
+            DataLoader: The validation DataLoader.
+        """
+        val_dataset = ValDataset(
+            dataset=self.dataset,
+            tokenizer=self.tokenizer,
+            max_len=self.max_seq_length,
+            sample_size=self.valid_sample_size
+        )
+        return DataLoader(
+            val_dataset,
+            batch_size=self.valid_batch_size
+        )
 
 
 logger = logging.getLogger(__name__)
@@ -277,12 +315,9 @@ class LoggingCallback(pl.Callback):
 class TrainDataset(Dataset):
     def __init__(self, dataset, tokenizer, max_len=256, sample_size=1):
         self.sample_size = sample_size
-        print("init TrainDataset ...")
         self.source_filepath = get_data_filepath(dataset,'train','complex')
         self.target_filepath = get_data_filepath(dataset,'train','simple')
-        print(self.source_filepath)
-        print("Initialized dataset done.....")
-      
+
         self.max_len = max_len
         self.tokenizer = tokenizer
 
@@ -356,10 +391,10 @@ class ValDataset(Dataset):
 
 
 def train(args):
-    seed_everything(args.seed)
+    seed_everything(args['seed'])
 
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        dirpath=args.output_dir,
+        dirpath=args['output_dir'],
         filename="checkpoint-{epoch}",
         monitor="val_loss",
         verbose=True,
@@ -367,22 +402,14 @@ def train(args):
         save_top_k=1
     )
     bar_callback = pl.callbacks.TQDMProgressBar(refresh_rate=1)
-    metrics_callback = MetricsCallback()
     train_params = dict(
-        accumulate_grad_batches=args.gradient_accumulation_steps,
-        # n_gpu=args.n_gpu,
-        max_epochs=args.num_train_epochs,
-        # early_stop_callback=False,
-        # gradient_clip_val=args.max_grad_norm,
-        # checkpoint_callback=checkpoint_callback,
+        accumulate_grad_batches=args['gradient_accumulation_steps'],
+        max_epochs=args['num_train_epochs'],
         callbacks=[
             LoggingCallback(),
-            #metrics_callback,
             checkpoint_callback, bar_callback],
-        logger=TensorBoardLogger(f'{args.output_dir}/logs'),
+        logger=TensorBoardLogger(f"{args['output_dir']}/logs"),
         num_sanity_val_steps=0,  # skip sanity check to save time for debugging purpose
-        # plugins='ddp_sharded',
-        #progress_bar_refresh_rate=1,
     )
 
     print("Initialize model")
@@ -390,19 +417,8 @@ def train(args):
     print(f"Device used {device}")
     model = BartBaseLineFineTuned(args)
  
-    model.args.dataset = args.dataset
-    print(model.args.dataset)
     #model = T5FineTuner(**train_args)
-    print(args.dataset)
     trainer = pl.Trainer(**train_params)
-    # trainer = pl.Trainer.from_argparse_args(
-    #     args,
-    #     gpus = args.n_gpu,
-    #     max_epochs = args.num_train_epochs,
-    #     accumulate_grad_batches = args.gradient_accumulation_steps,
-    #     callbacks = [LoggingCallback(), checkpoint_callback, bar_callback],
-    #     num_sanity_val_steps = args.nb_sanity_val_steps,
-    # )
 
     print(" Training model")
     trainer.fit(model)
@@ -410,4 +426,4 @@ def train(args):
     print("training finished")
 
     print("Saving model")
-    model.model.save_pretrained(args.output_dir)
+    model.model.save_pretrained(args['output_dir'])
