@@ -1,6 +1,7 @@
 import os
 import logging
 import torch
+from time import time
 from pytorch_lightning.loggers import TensorBoardLogger
 from easse.sari import corpus_sari
 from preprocessor import yield_lines, read_lines
@@ -80,8 +81,9 @@ class BartBaseLineFineTuned(pl.LightningModule):
 
         self.dataset = self.training_parameters['dataset']
 
-
-        self.core_model_path = self.model_name + 'core'
+        self.model_name = str(time())
+        self.core_model_path = self.model_name + '_core'
+        self.output_dir = self.training_parameters['output_dir']
         self.model_store_path = self.output_dir / self.core_model_path
 
     def is_logger(self):
