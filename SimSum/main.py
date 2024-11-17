@@ -1,74 +1,136 @@
-'''
-Main Program: 
-> python main.py
-'''
-
 from pathlib import Path
 import sys
-sys.path.append(str(Path(__file__).resolve().parent))
-
-from preprocessor import WIKI_DOC, D_WIKI, EXP_DIR
 import time
 import json
 
-from argparse import ArgumentParser
+# Ensure the project root is added to the Python path
+sys.path.append(str(Path(__file__).resolve().parent))
 
-#from T5_2 import SumSim, train
-#from Bart2 import SumSim, train
-from Bart_baseline_finetuned import BartBaseLineFineTuned, train
-#from T5_baseline_finetuned import T5BaseLineFineTuned, train
-
-
-def parse_arguments():
-    p = ArgumentParser()
-
-    p.add_argument('--seed', type=int, default=42, help='randomization seed')
-
-    # Add your model-specific arguments
-    p = BartBaseLineFineTuned.add_model_specific_args(p)
-    # p = T5BaseLineFineTuned.add_model_specific_args(p)
-
-    # Manually add the PyTorch Lightning Trainer arguments
-    p.add_argument('--max_epochs', type=int, default=10, help='Max number of training epochs')
-    p.add_argument('--gpus', type=int, default=1, help='Number of GPUs to use')
-    p.add_argument('--precision', type=int, default=8, help='Precision for training')
-    p.add_argument('--gradient_clip_val', type=float, default=0.0, help='Gradient clipping value')
-    p.add_argument('--accumulate_grad_batches', type=int, default=1, help='Accumulate gradients over N batches')
-    p.add_argument('--num_nodes', type=int, default=1, help='Number of nodes for distributed training')
-    p.add_argument('--accelerator', type=str, default='mps', help='Type of accelerator (mps, gpu, tpu, etc.)')
-
-    args, _ = p.parse_known_args()
-    return args
+from preprocessor import WIKI_DOC, EXP_DIR
+from Bart_baseline_finetuned import BartBaseLineFineTuned, train as bart_train
+from T5_baseline_finetuned import T5BaseLineFineTuned, train as t5_train
 
 
-# Create experiment directory
-def get_experiment_dir(create_dir=False):
-    dir_name = f'{int(time.time() * 1000000)}'
-    path = EXP_DIR / f'exp_{dir_name}'
-    if create_dir == True: path.mkdir(parents=True, exist_ok=True)
-    return path
+class ModelTrainer:
+    def __init__(
+        self,
+        model_name: str,
+        seed: int = 42,
+        max_epochs: int = 10,
+        gpus: int = 1,
+        precision: int = 8,
+        gradient_clip_val: float = 1.0,
+        accumulate_grad_batches: int = 0,
+        num_nodes: int = 1,
+        accelerator: str = 'mps',
+    ):
+        """
+        Initialize the trainer with model configuration.
 
-def log_params(filepath, kwargs):
-    filepath = Path(filepath)
-    kwargs_str = dict()
-    for key in kwargs:
-        kwargs_str[key] = str(kwargs[key])
-    json.dump(kwargs_str, filepath.open('w'), indent=4)
+        Args:
+            model_name (str): The name of the model ('bart' or 't5').
+            seed (int): Randomization seed.
+            max_epochs (int): Maximum number of training epochs.
+            gpus (int): Number of GPUs to use.
+            precision (int): Training precision (e.g., 16 for mixed precision).
+            gradient_clip_val (float): Gradient clipping value.
+            accumulate_grad_batches (int): Gradients are accumulated over N batches.
+            num_nodes (int): Number of nodes for distributed training.
+            accelerator (str): Type of accelerator (e.g., 'gpu', 'tpu', 'mps').
+        """
+        self.model_name = model_name.lower()
+        self.model_class = None
+        self.train_function = None
 
-def run_training(args, dataset):
+        if self.model_name == 'bart':
+            self.model_class = BartBaseLineFineTuned
+            self.train_function = bart_train
+        elif self.model_name == 't5':
+            self.model_class = T5BaseLineFineTuned
+            self.train_function = t5_train
+        else:
+            raise ValueError("Invalid model name. Use 'bart' or 't5'.")
 
-    args.output_dir = get_experiment_dir(create_dir=True)
-    # logging the args
-    log_params(args.output_dir / "params.json", vars(args))
+        # Store training parameters
+        self.seed = seed
+        self.max_epochs = max_epochs
+        self.gpus = gpus
+        self.precision = precision
+        self.gradient_clip_val = gradient_clip_val
+        self.accumulate_grad_batches = accumulate_grad_batches
+        self.num_nodes = num_nodes
+        self.accelerator = accelerator
 
-    args.dataset = dataset
-    print("Dataset: ",args.dataset)
-    train(args)
+    @staticmethod
+    def create_experiment_dir() -> Path:
+        """
+        Create a unique experiment directory based on the current timestamp.
+
+        Returns:
+            Path: The created experiment directory path.
+        """
+        dir_name = f'{int(time.time() * 1000000)}'
+        path = EXP_DIR / f'exp_{dir_name}'
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    @staticmethod
+    def log_parameters(filepath: Path, parameters: dict):
+        """
+        Log parameters to a JSON file.
+
+        Args:
+            filepath (Path): Path to the JSON file.
+            parameters (dict): Parameters to log.
+        """
+        with filepath.open('w') as f:
+            json.dump({k: str(v) for k, v in parameters.items()}, f, indent=4)
+
+    def get_training_config(self):
+        """
+        Prepare the training configuration as a dictionary.
+
+        Returns:
+            dict: Training configuration.
+        """
+        return {
+            'seed': self.seed,
+            'max_epochs': self.max_epochs,
+            'gpus': self.gpus,
+            'precision': self.precision,
+            'gradient_clip_val': self.gradient_clip_val,
+            'accumulate_grad_batches': self.accumulate_grad_batches,
+            'num_nodes': self.num_nodes,
+            'accelerator': self.accelerator,
+            'output_dir': self.create_experiment_dir(),
+        }
+
+    def train_model(self, dataset):
+        """
+        Run the training process.
+
+        Args:
+            dataset (str): The dataset to use for training.
+        """
+        # Prepare training arguments
+        training_args = self.get_training_config()
+        training_args['dataset'] = dataset
+
+        # Log training arguments
+        self.log_parameters(training_args['output_dir'] / "params.json", training_args)
+
+        # Start training
+        print(f"Starting training with {self.model_name.upper()} model on dataset: {dataset}")
+        self.train_function(training_args)
 
 
+if __name__ == "__main__":
+    # Dataset configuration
+    DATASET = WIKI_DOC
 
-if __name__=="__main__":
-    dataset = WIKI_DOC
-    args = parse_arguments()
-    run_training(args, dataset)
-
+    # Initialize and run the trainer (example for BART model)
+    trainer = ModelTrainer(
+        model_name="bart",
+        max_epochs=10
+    )
+    trainer.train_model(dataset=DATASET)
