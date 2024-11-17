@@ -225,8 +225,8 @@ class BartBaseLineFineTuned(pl.LightningModule):
       p = ArgumentParser(parents=[parent_parser],add_help = False)
       # facebook/bart-base Yale-LILY/brio-cnndm-uncased ainize/bart-base-cnn
       p.add_argument('-Summarizer','--sum_model', default='Yale-LILY/brio-cnndm-uncased')
-      p.add_argument('-TrainBS','--train_batch_size',type=int, default=8)
-      p.add_argument('-ValidBS','--valid_batch_size',type=int, default=8)
+      p.add_argument('-TrainBS','--train_batch_size',type=int, default=4)
+      p.add_argument('-ValidBS','--valid_batch_size',type=int, default=4)
       p.add_argument('-lr','--learning_rate',type=float, default=1e-5)
       p.add_argument('-MaxSeqLen','--max_seq_length',type=int, default=256)
       p.add_argument('-AdamEps','--adam_epsilon', default=1e-8)
@@ -239,7 +239,7 @@ class BartBaseLineFineTuned(pl.LightningModule):
       p.add_argument('-nbSVS','--nb_sanity_val_steps',default = -1)
       p.add_argument('-TrainSampleSize','--train_sample_size', default=0.01)
       p.add_argument('-ValidSampleSize','--valid_sample_size', default=0.01)
-      p.add_argument('-device','--device', default = 'cpu')
+      p.add_argument('-device','--device', default = 'mps')
       #p.add_argument('-NumBeams','--num_beams', default=8)
       return p
 
@@ -386,7 +386,7 @@ def train(args):
     )
 
     print("Initialize model")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "mps")
     print(f"Device used {device}")
     model = BartBaseLineFineTuned(args)
  
