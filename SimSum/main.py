@@ -35,7 +35,7 @@ def parse_arguments():
     p.add_argument('--gradient_clip_val', type=float, default=0.0, help='Gradient clipping value')
     p.add_argument('--accumulate_grad_batches', type=int, default=1, help='Accumulate gradients over N batches')
     p.add_argument('--num_nodes', type=int, default=1, help='Number of nodes for distributed training')
-    p.add_argument('--accelerator', type=str, default='cpu', help='Type of accelerator (cpu, gpu, tpu, etc.)')
+    p.add_argument('--accelerator', type=str, default='mps', help='Type of accelerator (mps, gpu, tpu, etc.)')
 
     args, _ = p.parse_known_args()
     return args
@@ -68,7 +68,7 @@ def run_training(args, dataset):
 
 
 if __name__=="__main__":
-    dataset = D_WIKI
+    dataset = WIKI_DOC
     args = parse_arguments()
     run_training(args, dataset)
 
