@@ -14,7 +14,7 @@ from easse.utils.constants import (
     DEFAULT_METRICS,
 )
 from easse.utils.resources import get_orig_sents, get_refs_sents
-from utils.D_SARI import D_SARIsent, D_SARI_file
+from util.D_SARI import D_SARIsent, D_SARI_file
 #from easse.report import write_html_report, write_multiple_systems_html_report
 
 

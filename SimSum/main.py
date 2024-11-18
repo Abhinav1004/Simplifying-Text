@@ -6,6 +6,7 @@ from typing import Literal
 from Bart_baseline_finetuned import BartBaseLineFineTuned, train as bart_train
 from T5_baseline_finetuned import T5BaseLineFineTuned, train as t5_train
 
+
 class ModelTrainer:
     def __init__(
         self,
@@ -65,7 +66,6 @@ class ModelTrainer:
         self.repo_dir = Path(__file__).resolve().parent
         self.exp_dir = self.repo_dir / 'experiments'
         self.dataset = dataset
-
 
     def create_experiment_dir(self) -> Path:
         """
