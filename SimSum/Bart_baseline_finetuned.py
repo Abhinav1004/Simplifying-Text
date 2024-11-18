@@ -1,10 +1,8 @@
+# Import libraries
 import os
 import logging
 import torch
 from pytorch_lightning.loggers import TensorBoardLogger
-from easse.sari import corpus_sari
-from preprocessor import yield_lines, read_lines
-from preprocessor import  get_data_filepath
 from torch.utils.data import Dataset, DataLoader
 import pytorch_lightning as pl
 from pytorch_lightning.trainer import seed_everything
@@ -13,6 +11,11 @@ from transformers import (
     BartForConditionalGeneration, BartTokenizer,
     get_linear_schedule_with_warmup,
 )
+
+# Import user defined libraries
+from easse.sari import corpus_sari
+from preprocessor import yield_lines, read_lines, get_data_filepath
+
 
 class BartBaseLineFineTuned(pl.LightningModule):
     """
@@ -79,8 +82,6 @@ class BartBaseLineFineTuned(pl.LightningModule):
         self.device_name = device
 
         self.dataset = self.training_parameters['dataset']
-
-
         self.core_model_path = self.model_name + 'core'
         self.model_store_path = self.output_dir / self.core_model_path
 
