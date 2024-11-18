@@ -7,7 +7,7 @@ if __name__ == "__main__":
     """
     configuration = {
         'seed': 0,
-        'model_name': 'bart-baseline',
+        'model_name': 't5-baseline',
         'dataset': 'wiki_doc',
         'num_train_epochs': 2,
         'gradient_accumulation_steps': 1,

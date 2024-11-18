@@ -1,5 +1,6 @@
 # Import required libraries
 from pathlib import Path
+import hashlib
 
 
 def yield_lines(filepath):
@@ -48,3 +49,26 @@ def get_data_filepath(data_set_dir, dataset, phase, data_type, i=None):
     suffix = f'.{i}' if i is not None else ''
     data_filename = f'{dataset}.{phase}.{data_type}{suffix}'
     return Path(data_set_dir) / dataset / data_filename
+
+
+def generate_hash(data):
+    h = hashlib.new('md5')
+    h.update(str(data).encode())
+    return h.hexdigest()
+
+
+def count_line(filepath):
+    filepath = Path(filepath)
+    line_count = 0
+    with filepath.open("r") as f:
+        for line in f:
+            line_count += 1
+    return line_count
+
+
+def write_lines(lines, filepath):
+    filepath = Path(filepath)
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+    with filepath.open("w") as fout:
+        for line in lines:
+            fout.write(line + '\n')

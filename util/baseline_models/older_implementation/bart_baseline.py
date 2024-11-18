@@ -8,7 +8,7 @@ from transformers import (
 )
 
 # Import user defined libraries
-from util.evaluate_model.sari import corpus_sari
+from easse.sari import corpus_sari
 from util.train_valid_data_generation import TrainDataset, ValDataset
 
 
@@ -19,7 +19,6 @@ class BartBaseLineFineTuned(pl.LightningModule):
     Args:
         model_name: Pre-trained BART model to fine-tune (e.g., 'facebook/bart-large-cnn').
     """
-
     def __init__(self, training_parameters, model_name='Yale-LILY/brio-cnndm-uncased'):
         super(BartBaseLineFineTuned, self).__init__()
 

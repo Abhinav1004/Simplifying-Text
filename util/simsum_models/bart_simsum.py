@@ -1,5 +1,5 @@
-from util.evaluate_model.sari import corpus_sari
-from util.preprocessing.preprocessor import OUTPUT_DIR
+from easse.sari import corpus_sari
+from util.processing.preprocessor import OUTPUT_DIR
 from argparse import ArgumentParser
 import nltk
 
