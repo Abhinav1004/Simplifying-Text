@@ -141,3 +141,4 @@ dmypy.json
 .pyre/
 
 SimSum/trained_models/
+.idea/
