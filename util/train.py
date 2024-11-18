@@ -36,12 +36,13 @@ class LoggingCallback(pl.Callback):
                         writer.write(f"{key} = {metrics[key]}\n")
 
 
-def train(model_config):
+def train(model_config, model_instance=None):
     """
     Function to train the model.
 
     Args:
         model_config: Dictionary containing model configurations.
+        model_instance: Instance of the model to be trained (optional).
     """
     # Seed for reproducibility
     seed = model_config.get('seed', 42)
@@ -69,9 +70,12 @@ def train(model_config):
         'num_sanity_val_steps': 0
     }
 
-    # Model initialization
-    print("Initializing model...")
-    model = Seq2SeqFineTunedModel(model_config)
+    # Model initialization (if model instance is not provided)
+    if model_instance is None:
+        print("Initializing baseline model...")
+        model = Seq2SeqFineTunedModel(model_config)
+    else:
+        model = model_instance
 
     # Trainer setup and training
     trainer = pl.Trainer(**train_params)
@@ -81,9 +85,23 @@ def train(model_config):
 
     # Saving the trained model
     output_dir = model_config['output_dir']
-    model_save_path = os.path.join(output_dir, f"{model_name}-final")
-    print(f"Saving model to {model_save_path}...")
-    model.model.save_pretrained(model_save_path)
-    print(f"Model saved at {model_save_path}.")
+    if "simsum" in model_name:
+        summarizer_save_path = os.path.join(output_dir, f"{model_name}-summarizer-final")
+        simplifier_save_path = os.path.join(output_dir, f"{model_name}-simplifier-final")
+        print(f"Saving summarizer to {summarizer_save_path}...")
+        model.summarizer.save_pretrained(summarizer_save_path)
+        model.summarizer_tokenizer.save_pretrained(summarizer_save_path)
+        print(f"Summarizer saved at {summarizer_save_path}.")
 
-    return model.model, model.tokenizer, model_save_path
+        print(f"Saving simplifier to {simplifier_save_path}...")
+        model.simplifier.save_pretrained(simplifier_save_path)
+        model.simplifier_tokenizer.save_pretrained(simplifier_save_path)
+        print(f"Simplifier saved at {simplifier_save_path}.")
+    else:
+        model_save_path = os.path.join(output_dir, f"{model_name}-final")
+        print(f"Saving model to {model_save_path}...")
+        model.model.save_pretrained(model_save_path)
+        model.tokenizer.save_pretrained(model_save_path)
+        print(f"Model saved at {model_save_path}.")
+
+    return model, output_dir
