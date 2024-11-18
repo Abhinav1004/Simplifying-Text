@@ -1,9 +1,9 @@
 # Import relevant libraries
 import os
 import logging
-import torch
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
+from util.baseline_models.baseline_model import Seq2SeqFineTunedModel
 
 logger = logging.getLogger(__name__)
 
@@ -36,13 +36,12 @@ class LoggingCallback(pl.Callback):
                         writer.write(f"{key} = {metrics[key]}\n")
 
 
-def train(model_config, model_class):
+def train(model_config):
     """
     Function to train the model.
 
     Args:
         model_config: Dictionary containing model configurations.
-        model_class: Model class to be instantiated and trained.
     """
     # Seed for reproducibility
     seed = model_config.get('seed', 42)
@@ -72,7 +71,7 @@ def train(model_config, model_class):
 
     # Model initialization
     print("Initializing model...")
-    model = model_class(model_config)
+    model = Seq2SeqFineTunedModel(model_config)
 
     # Trainer setup and training
     trainer = pl.Trainer(**train_params)
@@ -86,3 +85,5 @@ def train(model_config, model_class):
     print(f"Saving model to {model_save_path}...")
     model.model.save_pretrained(model_save_path)
     print(f"Model saved at {model_save_path}.")
+
+    return model.model, model.tokenizer, model_save_path

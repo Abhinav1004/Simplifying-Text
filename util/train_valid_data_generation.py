@@ -1,6 +1,6 @@
 # Import libraries
 from torch.utils.data import Dataset
-from util.preprocessing.preprocessor import (
+from util.processing.preprocessor import (
     yield_lines, read_lines, get_data_filepath
 )
 

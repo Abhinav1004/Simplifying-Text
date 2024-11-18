@@ -6,10 +6,7 @@ import torch
 # Import user defined libraries
 from util.utils import create_experiment_dir, log_parameters
 from util.train import train
-from util.baseline_models.bart_baseline import BartBaseLineFineTuned
-# from util.simsum_models.bart_simsum import SumSim as BartSimSum
-# from util.baseline_models.t5_baseline import T5BaseLineFineTuned
-# from util.simsum_models.t5_simsum import SumSim as T5SimSum
+from util.evaluate_model.evaluation_metrics import BartModelEvaluator, load_dataset
 
 
 class ModelRunner:
@@ -28,12 +25,15 @@ class ModelRunner:
         self.exp_dir = self.repo_dir / 'outputs'
 
         # Define the model name
+        self.model_config = configuration.copy()
         self.model_name = configuration['model_name'].lower()
-        self.model_class = None
+        self.model_save_path = None
+        self.model = None
+        self.tokenizer = None
+        self.model_details = None
         self.select_model()
 
-        # Store the model configuration
-        self.model_config = configuration.copy()
+        # Store the model locations
         self.model_config['output_dir'] = create_experiment_dir(self.exp_dir)
         self.model_config['data_location'] = self.repo_dir / 'datasets'
         self.model_config['device'] = torch.device("cuda" if torch.cuda.is_available() else "mps")
@@ -43,9 +43,11 @@ class ModelRunner:
         Function to select the model class and train function given the model name
         """
         if self.model_name == 'bart-baseline':
-            self.model_class = BartBaseLineFineTuned
-        # elif self.model_name == 't5-baseline':
-        #     self.model_class = T5BaseLineFineTuned
+            self.model_config['model_name'] = 'Yale-LILY/brio-cnndm-uncased'
+            self.model_config['scheduler_type'] = 'linear'
+        elif self.model_name == 't5-baseline':
+            self.model_config['model_name'] = 't5-base'
+            self.model_config['scheduler_type'] = 'cosine'
         # elif self.model_name == 'bart-simsum':
         #     self.model_class = BartSimSum
         # elif self.model_name == 't5-simsum':
@@ -67,12 +69,22 @@ class ModelRunner:
                 self.model_config['dataset']
             )
         )
-        train(self.model_config, self.model_class)
+        self.model, self.tokenizer, self.model_save_path = train(self.model_config)
 
-    @staticmethod
-    def evaluate_model():
+    def evaluate_model(self):
         """
         Function to evaluate the model
         """
-        print("Evaluation not complete")
+        print("Starting evaluation of models")
+        # Initialize the evaluator
+        evaluator = BartModelEvaluator(self.model_config, self.model, self.tokenizer)
+
+        # Load datasets (D_Wiki and Wiki_Doc)
+        dataset_dir = self.model_config['data_location']
+        dataset_name = self.model_config['dataset']
+
+        print(f"Evaluating on {dataset_name}")
+        complex_sents, simple_sents = load_dataset(dataset_dir, dataset_name)
+        scores = evaluator.evaluate(complex_sents, simple_sents)
+        print(f"Results for {dataset_name}: {scores}")
 
