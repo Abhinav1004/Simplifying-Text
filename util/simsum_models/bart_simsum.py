@@ -1,65 +1,17 @@
-from pytorch_lightning.loggers import TensorBoardLogger
 from util.evaluate_model.sari import corpus_sari
-from util.preprocessing.preprocessor import (
-    tokenize, yield_lines, read_lines, OUTPUT_DIR, safe_division, get_word2rank, remove_stopwords,
-    remove_punctuation, get_data_filepath
-)
-import Levenshtein
+from util.preprocessing.preprocessor import OUTPUT_DIR
 from argparse import ArgumentParser
-import os
-import logging
 import nltk
 
 nltk.download('punkt')
-
-import numpy as np
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 import pytorch_lightning as pl
-from pytorch_lightning.trainer import seed_everything
 from transformers import (
     AdamW, BartForConditionalGeneration, BartTokenizerFast, get_cosine_schedule_with_warmup
 )
 from Ts_BART import BartFineTuner
 
-
-class MetricsCallback(pl.Callback):
-    def __init__(self):
-        super().__init__()
-        self.metrics = []
-
-    def on_validation_end(self, trainer, pl_module):
-        self.metrics.append(trainer.callback_metrics)
-
-
-### Special tokens
-def char_ratio(complex_sentence, simple_sentence):
-    return round(safe_division(len(simple_sentence), len(complex_sentence)))
-
-
-def LevSim(complex_sentence, simple_sentence):
-    return round(Levenshtein.ratio(complex_sentence, simple_sentence))
-
-
-def word_rank_ratio(complex_sentence, simple_sentence):
-    def get_rank(word):
-        rank = get_word2rank().get(word, len(get_word2rank()))
-        return np.log(1 + rank)
-
-    def get_lexical_complexity_score(sentence):
-        words = tokenize(remove_stopwords(remove_punctuation(sentence)))
-        words = [word for word in words if word in get_word2rank()]
-        if len(words) == 0:
-            return np.log(1 + len(get_word2rank()))
-        return np.quantile([get_rank(word) for word in words], 0.75)
-
-    return round(min(safe_division(
-        get_lexical_complexity_score(simple_sentence),
-        get_lexical_complexity_score(complex_sentence)
-    ), 2))
-
-
-### Speicial tokens end
 
 class SumSim(pl.LightningModule):
     def __init__(self, args):
@@ -73,8 +25,7 @@ class SumSim(pl.LightningModule):
         self.summarizer = self.summarizer.to(self.args.device)
 
         # self.simplifier = BartForConditionalGeneration.from_pretrained(self.args.sum_model)
-        self.simplifier = BartFineTuner.load_from_checkpoint(
-            "experiments/exp_WikiLarge_BARTSingle/checkpoint-epoch=2.ckpt")
+        self.simplifier = BartFineTuner.load_from_checkpoint("experiments/exp_WikiLarge_BARTSingle/checkpoint-epoch=2.ckpt")
         self.simplifier = self.simplifier.model.to(self.args.device)
         self.simplifier_tokenizer = BartTokenizerFast.from_pretrained(self.args.sim_model)
 
@@ -387,195 +338,3 @@ class SumSim(pl.LightningModule):
         p.add_argument('-device', '--device', default='cuda')
         # p.add_argument('-NumBeams','--num_beams', default=8)
         return p
-
-
-logger = logging.getLogger(__name__)
-
-
-class LoggingCallback(pl.Callback):
-    def on_validation_end(self, trainer, pl_module):
-        logger.info("***** Validation results *****")
-        if pl_module.is_logger():
-            metrics = trainer.callback_metrics
-            # Log results
-            for key in sorted(metrics):
-                print(key, metrics[key])
-                if key not in ["log", "progress_bar"]:
-                    logger.info("{} = {}\n".format(key, str(metrics[key])))
-
-    def on_test_end(self, trainer, pl_module):
-        logger.info("***** Test results *****")
-
-        if pl_module.is_logger():
-            metrics = trainer.callback_metrics
-
-            # Log and save results to file
-            output_test_results_file = os.path.join(pl_module.args.output_dir, "test_results.txt")
-            with open(output_test_results_file, "w") as writer:
-                for key in sorted(metrics):
-                    if key not in ["log", "progress_bar"]:
-                        logger.info("{} = {}\n".format(key, str(metrics[key])))
-                        writer.write("{} = {}\n".format(key, str(metrics[key])))
-
-
-##### build dataset Loader #####
-class TrainDataset(Dataset):
-    def __init__(self, dataset, tokenizer, max_len=256, sample_size=1):
-        self.sample_size = sample_size
-        print("init TrainDataset ...")
-        self.source_filepath = get_data_filepath(dataset, 'train', 'complex')
-        self.target_filepath = get_data_filepath(dataset, 'train', 'simple')
-        print("Initialized dataset done.....")
-        # preprocessor = load_preprocessor()
-        # self.source_filepath = preprocessor.get_preprocessed_filepath(dataset, 'train', 'complex')
-        # self.target_filepath = preprocessor.get_preprocessed_filepath(dataset, 'train', 'simple')
-
-        self.max_len = max_len
-        self.tokenizer = tokenizer
-
-        self._load_data()
-
-    def _load_data(self):
-        self.inputs = read_lines(self.source_filepath)
-        self.targets = read_lines(self.target_filepath)
-
-    def __len__(self):
-        return int(len(self.inputs) * self.sample_size)
-
-    def __getitem__(self, index):
-        source = self.inputs[index]
-        # source = "summarize: " + self.inputs[index]
-        target = self.targets[index]
-
-        tokenized_inputs = self.tokenizer(
-            [source],
-            truncation=True,
-            max_length=self.max_len,
-            padding='max_length',
-            return_tensors="pt"
-        )
-        tokenized_targets = self.tokenizer(
-            [target],
-            truncation=True,
-            max_length=self.max_len,
-            padding='max_length',
-            return_tensors="pt"
-        )
-        source_ids = tokenized_inputs["input_ids"].squeeze()
-        target_ids = tokenized_targets["input_ids"].squeeze()
-
-        src_mask = tokenized_inputs["attention_mask"].squeeze()  # might need to squeeze
-        target_mask = tokenized_targets["attention_mask"].squeeze()  # might need to squeeze
-
-        return {"source_ids": source_ids, "source_mask": src_mask, "target_ids": target_ids, "target_mask": target_mask,
-                'sources': self.inputs[index], 'targets': [self.targets[index]],
-                'source': source, 'target': target}
-
-
-class ValDataset(Dataset):
-    def __init__(self, dataset, tokenizer, max_len=256, sample_size=1):
-        self.sample_size = sample_size
-        ### WIKI-large dataset ###
-        self.source_filepath = get_data_filepath(dataset, 'valid', 'complex')
-        self.target_filepaths = get_data_filepath(dataset, 'valid', 'simple')
-
-        ### turkcorpus dataset ###
-        # self.source_filepath = get_data_filepath(TURKCORPUS_DATASET, 'valid', 'complex')
-        # self.target_filepaths = [get_data_filepath(TURKCORPUS_DATASET, 'valid', 'simple.turk',i)for i in range(8)]
-        # if dataset == NEWSELA_DATASET:
-        #     self.target_filepaths = [get_data_filepath(dataset, 'valid', 'simple')]
-
-        # else:  # TURKCORPUS_DATASET as default
-        #     self.target_filepaths = [get_data_filepath(TURKCORPUS_DATASET, 'valid', 'simple.turk', i) for i in range(8)]
-
-        self.max_len = max_len
-        self.tokenizer = tokenizer
-
-        self._build()
-
-    def __len__(self):
-        return int(len(self.inputs) * self.sample_size)
-
-    def __getitem__(self, index):
-        return {"source": self.inputs[index], "targets": self.targets[index]}
-
-    def _build(self):
-        self.inputs = []
-        self.targets = []
-
-        for source in yield_lines(self.source_filepath):
-            self.inputs.append(source)
-
-        for target in yield_lines(self.target_filepaths):
-            self.targets.append(target)
-
-        ### turkcorpus dataset ###
-        # self.targets = [ [] for _ in range(count_line(self.target_filepaths[0]))]
-        # for file_path in self.target_filepaths:
-        #     for i, target in enumerate(yield_lines(file_path)):
-        #         self.targets[i].append(target)
-
-        # self.targets = [[] for _ in range(count_line(self.target_filepaths[0]))]
-        # for filepath in self.target_filepaths:
-        #     for idx, line in enumerate(yield_lines(filepath)):
-        #         self.targets[idx].append(line)
-
-
-def train(args):
-    seed_everything(args.seed)
-
-    checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        dirpath=args.output_dir,
-        filename="checkpoint-{epoch}",
-        monitor="val_loss",
-        verbose=True,
-        mode="min",
-        save_top_k=1
-    )
-    bar_callback = pl.callbacks.TQDMProgressBar(refresh_rate=1)
-    metrics_callback = MetricsCallback()
-    train_params = dict(
-        accumulate_grad_batches=args.gradient_accumulation_steps,
-        gpus=args.n_gpu,
-        max_epochs=args.num_train_epochs,
-        # early_stop_callback=False,
-        # gradient_clip_val=args.max_grad_norm,
-        # checkpoint_callback=checkpoint_callback,
-        callbacks=[
-            LoggingCallback(),
-            # metrics_callback,
-            checkpoint_callback, bar_callback],
-        logger=TensorBoardLogger(f'{args.output_dir}/logs'),
-        num_sanity_val_steps=0,  # skip sanity check to save time for debugging purpose
-        # plugins='ddp_sharded',
-        # progress_bar_refresh_rate=1,
-
-    )
-
-    print("Initialize model")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = SumSim(args)
-    # model = SumSim.load_from_checkpoint("Xinyu/experiments/exp_DWikiMatch_BART/checkpoint-epoch=4.ckpt")
-    model.args.dataset = args.dataset
-    print(model.args.dataset)
-    # model = T5FineTuner(**train_args)
-    print(args.dataset)
-    trainer = pl.Trainer(**train_params)
-    # trainer = pl.Trainer.from_argparse_args(
-    #     args,
-    #     gpus = args.n_gpu,
-    #     max_epochs = args.num_train_epochs,
-    #     accumulate_grad_batches = args.gradient_accumulation_steps,
-    #     callbacks = [LoggingCallback(), checkpoint_callback, bar_callback],
-    #     num_sanity_val_steps = args.nb_sanity_val_steps,
-    # )
-
-    print(" Training model")
-    trainer.fit(model)
-
-    print("training finished")
-
-    # print("Saving model")
-    # model.model.save_pretrained(args.output_dir)
-
-    # print("Saved model")
