@@ -8,7 +8,7 @@ import torch
 from util.processing.preprocessor import get_data_filepath, yield_lines, read_lines, count_line, write_lines
 from util.evaluate_model.temp.sari import corpus_sari
 import time
-from util.simsum_models.t5_simsum import SumSim
+from util.simsum_models.older_implementation.t5_simsum import SumSim
 
 
 @contextmanager

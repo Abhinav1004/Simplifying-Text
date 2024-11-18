@@ -7,7 +7,7 @@ if __name__ == "__main__":
     """
     configuration = {
         'seed': 0,
-        'model_name': 't5-baseline',
+        'model_name': 'bart-simsum',
         'dataset': 'wiki_doc',
         'num_train_epochs': 2,
         'gradient_accumulation_steps': 1,
@@ -20,7 +20,13 @@ if __name__ == "__main__":
         'warmup_steps': 5,
         'custom_loss': False,
         'train_sample_size': 0.001,
-        'valid_sample_size': 0.001
+        'valid_sample_size': 0.001,
+
+        # for simsum models
+        'lambda_': 11,
+        'hidden_size': 1,
+        'w1': 1,
+        'prompting_strategy': 'kw_score'
     }
 
     # Initialize, run and evaluate the model

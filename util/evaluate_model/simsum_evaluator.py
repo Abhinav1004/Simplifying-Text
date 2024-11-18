@@ -3,6 +3,8 @@ from nltk.tokenize import word_tokenize
 from pathlib import Path
 import textstat
 from util.processing.preprocessor import get_data_filepath
+from util.simsum_models.keyword_prompting import create_kw_sep_prompt, create_kw_score_prompt
+import nltk
 from easse.sari import corpus_sari as easse_corpus_sari
 from easse.fkgl import corpus_fkgl as easse_corpus_fkgl
 
@@ -29,24 +31,29 @@ def load_dataset(dataset_dir, dataset_name, phase='test'):
     return complex_sents, simple_sents
 
 
-class BartModelEvaluator:
+class SumSimEvaluator:
     """
-    A class for evaluating a BART-based summarization model using SARI, D-SARI, and FKGL metrics.
+    A class for evaluating a SumSim-based summarization model using SARI, D-SARI, and FKGL metrics.
 
     Args:
         model_config : Configuration dictionary containing the device to run the model on ("cuda", "cpu", or "mps").
-        model (BartForConditionalGeneration): Pre-trained BART model to evaluate.
-        tokenizer (BartTokenizer): Tokenizer for the BART model.
+        summarizer (AutoModelForSeq2SeqLM): Pre-trained summarization model.
+        simplifier (AutoModelForSeq2SeqLM): Pre-trained simplification model.
+        summarizer_tokenizer (AutoTokenizer): Tokenizer for the summarization model.
+        simplifier_tokenizer (AutoTokenizer): Tokenizer for the simplification model.
     """
-    def __init__(self, model_config, model, tokenizer):
-        self.model = model.to(model_config['device'])
-        self.tokenizer = tokenizer
+    def __init__(self, model_config, summarizer, simplifier, summarizer_tokenizer, simplifier_tokenizer):
+        self.summarizer = summarizer.to(model_config['device'])
+        self.simplifier = simplifier.to(model_config['device'])
+        self.summarizer_tokenizer = summarizer_tokenizer
+        self.simplifier_tokenizer = simplifier_tokenizer
         self.device = model_config['device']
         self.max_seq_length = model_config['max_seq_length']
+        self.prompting_strategy = model_config.get('prompting_strategy', 'kw_sep')
 
     def generate_summary(self, sentence, max_length=256):
         """
-        Generate a summary for a given input sentence using the BART model.
+        Generate a summary for a given input sentence using the summarizer.
 
         Args:
             sentence (str): Input sentence to be summarized.
@@ -55,7 +62,7 @@ class BartModelEvaluator:
         Returns:
             str: Generated summary.
         """
-        inputs = self.tokenizer(
+        inputs = self.summarizer_tokenizer(
             sentence,
             return_tensors="pt",
             max_length=self.max_seq_length,
@@ -66,7 +73,7 @@ class BartModelEvaluator:
         input_ids = inputs["input_ids"]
         attention_mask = inputs["attention_mask"]
 
-        summary_ids = self.model.generate(
+        summary_ids = self.summarizer.generate(
             input_ids=input_ids,
             attention_mask=attention_mask,
             max_length=max_length,
@@ -74,7 +81,49 @@ class BartModelEvaluator:
             early_stopping=True
         )
 
-        return self.tokenizer.decode(summary_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=True)
+        return self.summarizer_tokenizer.decode(summary_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=True)
+
+    def generate_simplified_text(self, source_sent):
+        """
+        Generate simplified text using the SumSim model with keyword prompting.
+
+        Args:
+            source_sent (str): Source sentence to be simplified.
+
+        Returns:
+            str: Simplified text.
+        """
+        # Apply keyword prompting based on strategy
+        if self.prompting_strategy == 'kw_score':
+            prompt_text = create_kw_score_prompt(source_sent)
+        else:  # Default to kw_sep
+            prompt_text = create_kw_sep_prompt(source_sent)
+
+        # Generate summary using the summarizer
+        summary = self.generate_summary(prompt_text)
+
+        # Tokenize the summary for simplification
+        inputs = self.simplifier_tokenizer(
+            summary,
+            return_tensors="pt",
+            max_length=self.max_seq_length,
+            truncation=True,
+            padding="max_length"
+        ).to(self.device)
+
+        input_ids = inputs["input_ids"]
+        attention_mask = inputs["attention_mask"]
+
+        # Generate simplified output using the simplifier
+        simplified_ids = self.simplifier.generate(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            max_length=256,
+            num_beams=5,
+            early_stopping=True
+        )
+
+        return self.simplifier_tokenizer.decode(simplified_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=True)
 
     @staticmethod
     def calculate_sari_and_d_sari(source_sent, predicted_sent, references):
@@ -137,9 +186,9 @@ class BartModelEvaluator:
 
         for i, source_sent in enumerate(source_sentences):
             try:
-                predicted_sent = self.generate_summary(source_sent)
+                predicted_sent = self.generate_simplified_text(source_sent)
             except Exception as e:
-                print(f"Error generating summary for sample {i}: {e}")
+                print(f"Error generating simplified text for sample {i}: {e}")
                 predicted_sent = ""  # Fallback to an empty prediction
 
             predictions.append(predicted_sent)
