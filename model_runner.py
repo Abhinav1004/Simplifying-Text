@@ -105,6 +105,8 @@ class ModelRunner:
         dataset_name = self.model_config['dataset']
 
         print(f"Evaluating on {dataset_name}")
-        complex_sents, simple_sents = load_dataset(dataset_dir, dataset_name)
+        complex_sents, simple_sents = load_dataset(
+            dataset_dir, dataset_name, percentage=self.model_config['test_sample_size']
+        )
         scores = evaluator.evaluate(complex_sents, simple_sents)
         print(f"Results for {dataset_name}: {scores}")

@@ -29,3 +29,24 @@ def log_parameters(filepath, parameters):
     """
     with filepath.open('w') as f:
         json.dump({k: str(v) for k, v in parameters.items()}, f, indent=4)
+
+
+def save_log(model_name, epoch, loss=None, sari=None, data_type='train'):
+    """
+    Save log for training or validation data.
+
+    Args:
+        model_name: use model name to save
+        epoch (int): Current epoch.
+        loss (float): Loss value (optional).
+        sari (float): SARI score (optional).
+        data_type: Data type train or validation
+    """
+    if data_type == 'train':
+        with open('{}_training_log.csv'.format(model_name), 'a') as f:
+            log_line = f"{epoch},{loss if loss is not None else ''}\n"
+            f.write(log_line)
+    elif data_type == 'validation':
+        with open('{}_validation_log.csv'.format(model_name), 'a') as f:
+            log_line = f"{epoch},{loss if loss is not None else ''},{sari if sari is not None else ''}\n"
+            f.write(log_line)
