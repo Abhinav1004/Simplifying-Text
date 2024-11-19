@@ -3,6 +3,7 @@ from keybert import KeyBERT
 # Initialize KeyBERT model
 keybert_model = KeyBERT()
 
+
 # Function to extract keywords with KeyBERT
 def extract_keywords(text, top_n=5, diversity=0.5):
     """

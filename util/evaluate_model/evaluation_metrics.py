@@ -59,6 +59,7 @@ class BartModelEvaluator:
         self.tokenizer = tokenizer
         self.device = model_config['device']
         self.max_seq_length = model_config['max_seq_length']
+        self.output_location = model_config['output_dir']
 
     def generate_summary(self, sentence, max_length=256):
         """
@@ -240,7 +241,7 @@ class BartModelEvaluator:
 
         # Save metrics to a CSV file using pandas
         df = pd.DataFrame(metrics)
-        df.to_csv('evaluation_metrics_baseline.csv', index=False)
+        df.to_csv('{}/evaluation_metrics_baseline.csv'.format(self.output_location), index=False)
 
         return {
             "SARI": avg_sari,
@@ -248,5 +249,5 @@ class BartModelEvaluator:
             "FKGL": avg_fkgl,
             "EASSE SARI": easse_sari,
             "EASSE FKGL": easse_fkgl
-        }
+        }, df
 

@@ -10,6 +10,7 @@ from util.evaluate_model.simsum_evaluator import SumSimEvaluator
 from util.evaluate_model.evaluation_metrics import BartModelEvaluator, load_dataset
 from util.simsum_models.simsum_model import SumSimModel
 from util.baseline_models.baseline_model import Seq2SeqFineTunedModel
+from util.generate_plots import plot_average_loss, plot_metric_distributions, identify_files
 
 
 class ModelRunner:
@@ -108,5 +109,11 @@ class ModelRunner:
         complex_sents, simple_sents = load_dataset(
             dataset_dir, dataset_name, percentage=self.model_config['test_sample_size']
         )
-        scores = evaluator.evaluate(complex_sents, simple_sents)
+        scores, score_table = evaluator.evaluate(complex_sents, simple_sents)
         print(f"Results for {dataset_name}: {scores}")
+
+        # Generate plots
+        files = identify_files(self.model_config['output_dir'])
+        plot_average_loss(files['training_log'], files['validation_log'])
+        plot_metric_distributions(files['evaluation_metrics'])
+

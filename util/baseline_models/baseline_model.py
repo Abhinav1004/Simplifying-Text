@@ -42,13 +42,17 @@ class Seq2SeqFineTunedModel(pl.LightningModule):
         self.gradient_accumulation_steps = training_parameters['gradient_accumulation_steps']
         self.custom_loss = training_parameters.get('custom_loss', False)
         self.scheduler_type = training_parameters.get('scheduler_type', 'linear')
-        with open('{}_training_log.csv'.format(self.training_parameters['model_name']), 'w') as f:
-            f.write('epoch,loss\n')
-        with open('{}_validation_log.csv'.format(self.training_parameters['model_name']), 'w') as f:
-            f.write('data_index,loss,sari\n')
+        with open('{}/{}_training_log.csv'.format(
+                self.training_parameters['output_dir'],
+                self.training_parameters['model_name'].replace("/", "-")
+        ), 'w') as f: f.write('epoch,loss\n')
+        with open('{}/{}_validation_log.csv'.format(
+                training_parameters['output_dir'],
+                self.training_parameters['model_name'].replace("/", "-")
+        ), 'w') as f: f.write('epoch,loss,sari\n')
 
-        self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name).to(self.device_name)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModelForSeq2SeqLM.from_pretrained(self.model_name).to(self.device_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
 
         # Data and output paths
         self.dataset = self.training_parameters['dataset']
@@ -106,7 +110,13 @@ class Seq2SeqFineTunedModel(pl.LightningModule):
 
         loss = outputs.loss
         self.log('train_loss', loss, on_step=True, prog_bar=True, logger=True)
-        save_log(self.training_parameters['model_name'], self.current_epoch, loss=loss.item(), data_type='train')
+        save_log(
+            self.training_parameters['output_dir'],
+            self.training_parameters['model_name'],
+            self.current_epoch,
+            loss=loss.item(),
+            data_type='train'
+        )
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -164,8 +174,14 @@ class Seq2SeqFineTunedModel(pl.LightningModule):
         pred_sents = [generate(source) for source in batch["source"]]
         score = corpus_sari(batch["source"], pred_sents, [batch["targets"]])
         loss = 1 - score / 100
-        save_log(self.training_parameters['model_name'], self.current_epoch, loss=loss, sari=score,
-                 data_type='validation')
+        save_log(
+            self.training_parameters['output_dir'],
+            self.training_parameters['model_name'],
+            self.current_epoch,
+            loss=loss,
+            sari=score,
+            data_type='validation'
+        )
 
         return loss
 

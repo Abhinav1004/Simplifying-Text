@@ -9,7 +9,7 @@ if __name__ == "__main__":
         'seed': 0,
         'model_name': 'bart-baseline',
         'dataset': 'wiki_doc',
-        'num_train_epochs': 10,
+        'num_train_epochs': 3,
         'gradient_accumulation_steps': 1,
         'train_batch_size': 4,
         'valid_batch_size': 4,
@@ -19,15 +19,17 @@ if __name__ == "__main__":
         'weight_decay': 0.0001,
         'warmup_steps': 5,
         'custom_loss': True,
-        'train_sample_size': 0.1,
-        'valid_sample_size': 0.1,
+        'train_sample_size': 0.001,
+        'valid_sample_size': 0.01,
 
         # for simsum models
         'lambda_': 0.001,
         'hidden_size': 1,
         'w1': 1,
         'prompting_strategy': 'kw_score',
-        'test_sample_size': 1
+        'div_score': 0.9,
+        'top_keywords': 5,
+        'test_sample_size': 0.005
     }
 
     # Initialize, run and evaluate the model
