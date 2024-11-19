@@ -111,11 +111,13 @@ class SumSimModel(pl.LightningModule):
         targets = batch['target']
         labels[labels[:, :] == self.simplifier_tokenizer.pad_token_id] = -100
 
-        # Select the keyword prompting strategy based on training parameters
+        # Conditionally handle keyword prompting based on strategy
         if self.training_parameters.get('prompting_strategy') == 'kw_score':
             prompt_source = [create_kw_score_prompt(text, self.top_keywords, self.div_score) for text in source]
-        else:
+        elif self.training_parameters.get('prompting_strategy') == 'kw_sep':
             prompt_source = [create_kw_sep_prompt(text, self.top_keywords, self.div_score) for text in source]
+        else:
+            prompt_source = source
 
         # Tokenize targets for the simplifier
         targets_encoding = self.simplifier_tokenizer(

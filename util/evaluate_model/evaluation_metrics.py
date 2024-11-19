@@ -226,19 +226,6 @@ class BartModelEvaluator:
         print(f"EASSE SARI: {easse_sari:.2f}")
         print(f"EASSE FKGL: {easse_fkgl:.2f}")
 
-        # Append average metrics as a separate row
-        metrics.append({
-            'Sample': 'Average',
-            'Source': 'N/A',
-            'Predicted': 'N/A',
-            'Reference': 'N/A',
-            'SARI': avg_sari,
-            'D-SARI': avg_d_sari,
-            'FKGL': avg_fkgl,
-            'EASSE SARI': easse_sari,
-            'EASSE FKGL': easse_fkgl
-        })
-
         # Save metrics to a CSV file using pandas
         df = pd.DataFrame(metrics)
         df.to_csv('{}/evaluation_metrics_baseline.csv'.format(self.output_location), index=False)
