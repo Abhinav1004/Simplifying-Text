@@ -97,8 +97,10 @@ class SumSimEvaluator:
         # Apply keyword prompting based on strategy
         if self.prompting_strategy == 'kw_score':
             prompt_text = create_kw_score_prompt(source_sent)
-        else:  # Default to kw_sep
+        elif self.prompting_strategy == 'kw_sep':
             prompt_text = create_kw_sep_prompt(source_sent)
+        else:
+            prompt_text = source_sent
 
         # Generate summary using the summarizer
         summary = self.generate_summary(prompt_text)

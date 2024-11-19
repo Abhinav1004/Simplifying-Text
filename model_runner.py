@@ -32,7 +32,7 @@ class ModelRunner:
         self.model_config = configuration.copy()
 
         # Store the model locations
-        self.model_config['output_dir'] = create_experiment_dir(self.exp_dir)
+        self.model_config['output_dir'] = create_experiment_dir(self.exp_dir, self.model_config)
         self.model_config['data_location'] = self.repo_dir / 'datasets'
         self.model_config['device'] = torch.device("cuda" if torch.cuda.is_available() else "mps")
 

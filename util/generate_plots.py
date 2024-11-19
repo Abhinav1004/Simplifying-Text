@@ -65,10 +65,10 @@ def plot_average_loss(output_dir, training_log_path, validation_log_path, output
     # Plotting
     plt.figure(figsize=(10, 5))
     plt.plot(avg_training_loss['epoch'], avg_training_loss['loss'], marker='o', linestyle='-', color='b', label='Average Training Loss')
-    plt.plot(avg_validation_loss['epoch'], avg_validation_loss['loss'], marker='x', linestyle='--', color='r', label='Average Validation Loss')
+    # plt.plot(avg_validation_loss['epoch'], avg_validation_loss['loss'], marker='x', linestyle='--', color='r', label='Average Validation Loss')
     plt.xlabel('Epoch')
     plt.ylabel('Average Loss')
-    plt.title('Epoch vs Average Loss (Training and Validation)')
+    plt.title('Epoch vs Average Training Loss')
     plt.legend()
     plt.grid(True)
     plt.savefig("{}/loss.png".format(output_dir))
