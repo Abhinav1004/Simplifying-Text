@@ -7,7 +7,7 @@ if __name__ == "__main__":
     """
     configuration = {
         'seed': 0,
-        'model_name': 'bart-simsum',
+        'model_name': 'bart-baseline',
         'dataset': 'wiki_doc',
         'num_train_epochs': 10,
         'gradient_accumulation_steps': 1,
