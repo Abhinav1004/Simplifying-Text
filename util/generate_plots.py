@@ -28,18 +28,19 @@ def identify_files(folder_path):
             categorized_files['training_log'] = os.path.join(folder_path, file_name)
         elif "_validation_log" in file_name:
             categorized_files['validation_log'] = os.path.join(folder_path, file_name)
-        elif "_evaluation_metrics" in file_name:
+        elif "evaluation_metrics" in file_name:
             categorized_files['evaluation_metrics'] = os.path.join(folder_path, file_name)
 
     return categorized_files
 
 
-def plot_average_loss(training_log_path, validation_log_path, output_file='average_loss.csv'):
+def plot_average_loss(output_dir, training_log_path, validation_log_path, output_file='average_loss.csv'):
     """
     Plots the average training and validation loss over epochs, and saves
     the averaged loss data to a CSV file.
 
     Parameters:
+    - output_dir: Output directory
     - training_log_path (str): Path to the training log CSV file.
     - validation_log_path (str): Path to the validation log CSV file.
     - output_file (str): Path to save the output CSV file containing average loss data.
@@ -59,26 +60,27 @@ def plot_average_loss(training_log_path, validation_log_path, output_file='avera
     combined_loss.columns = ['epoch', 'average_loss', 'data_type']
 
     # Save to CSV
-    combined_loss.to_csv(output_file, index=False)
+    combined_loss.to_csv("{}/{}".format(output_dir, output_file), index=False)
 
     # Plotting
     plt.figure(figsize=(10, 5))
-    plt.plot(avg_training_loss['epoch'], avg_training_loss['average_loss'], marker='o', linestyle='-', color='b', label='Average Training Loss')
-    plt.plot(avg_validation_loss['epoch'], avg_validation_loss['average_loss'], marker='x', linestyle='--', color='r', label='Average Validation Loss')
+    plt.plot(avg_training_loss['epoch'], avg_training_loss['loss'], marker='o', linestyle='-', color='b', label='Average Training Loss')
+    plt.plot(avg_validation_loss['epoch'], avg_validation_loss['loss'], marker='x', linestyle='--', color='r', label='Average Validation Loss')
     plt.xlabel('Epoch')
     plt.ylabel('Average Loss')
     plt.title('Epoch vs Average Loss (Training and Validation)')
     plt.legend()
     plt.grid(True)
-    plt.show()
+    plt.savefig("{}/loss.png".format(output_dir))
 
 
-def plot_metric_distributions(evaluation_metrics_path, output_file='average_metrics.csv'):
+def plot_metric_distributions(output_dir, evaluation_metrics_path, output_file='average_metrics.csv'):
     """
     Plots the distribution of specified metrics from the evaluation metrics data
     and saves the averaged metrics to a CSV file.
 
     Parameters:
+    - output_dir: Output directory
     - evaluation_metrics_path (str): Path to the evaluation metrics CSV file.
     - output_file (str): Path to save the output CSV file containing average metrics data.
     """
@@ -92,7 +94,7 @@ def plot_metric_distributions(evaluation_metrics_path, output_file='average_metr
     avg_metrics['data_type'] = 'evaluation'
 
     # Save to CSV
-    avg_metrics.to_csv(output_file, index=False)
+    avg_metrics.to_csv("{}/{}".format(output_dir, output_file), index=False)
 
     # Plot distributions
     for metric in metrics_columns:
@@ -102,4 +104,4 @@ def plot_metric_distributions(evaluation_metrics_path, output_file='average_metr
         plt.ylabel('Frequency')
         plt.title(f'Distribution of {metric}')
         plt.grid(True)
-        plt.show()
+        plt.savefig("{}/metrics_{}.png".format(output_dir, metric))

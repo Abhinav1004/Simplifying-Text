@@ -47,7 +47,7 @@ class ModelRunner:
         Function to select the model class and configure the settings based on the model name.
         """
         if self.model_name == 'bart-baseline':
-            self.model_config['model_name'] = 'Yale-LILY/brio-cnndm-uncased'
+            self.model_config['model_name'] = 'facebook/bart-base' # 'Yale-LILY/brio-cnndm-uncased'
             self.model_config['scheduler_type'] = 'linear'
         elif self.model_name == 't5-baseline':
             self.model_config['model_name'] = 't5-base'
@@ -114,6 +114,6 @@ class ModelRunner:
 
         # Generate plots
         files = identify_files(self.model_config['output_dir'])
-        plot_average_loss(files['training_log'], files['validation_log'])
-        plot_metric_distributions(files['evaluation_metrics'])
+        plot_average_loss(self.model_config['output_dir'], files['training_log'], files['validation_log'])
+        plot_metric_distributions(self.model_config['output_dir'], files['evaluation_metrics'])
 
