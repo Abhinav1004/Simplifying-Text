@@ -5,16 +5,19 @@ import textstat
 from util.processing.preprocessor import get_data_filepath
 from easse.sari import corpus_sari as easse_corpus_sari
 from easse.fkgl import corpus_fkgl as easse_corpus_fkgl
+import random
+import pandas as pd
 
 
-def load_dataset(dataset_dir, dataset_name, phase='test'):
+def load_dataset(dataset_dir, dataset_name, phase='test', percentage=1.0):
     """
-    Load the dataset for evaluation.
+    Load the dataset for evaluation with an optional parameter to specify the percentage of data to be used.
 
     Args:
         dataset_dir (str or Path): Path to the dataset directory.
         dataset_name (str): Name of the dataset (e.g., 'dwiki' or 'wiki_doc').
         phase (str): Dataset phase to load ('train', 'valid', 'test').
+        percentage (float): Percentage of data to be used (value between 0.0 and 1.0).
 
     Returns:
         tuple: (list of complex sentences, list of simple sentences)
@@ -26,7 +29,20 @@ def load_dataset(dataset_dir, dataset_name, phase='test'):
     complex_sents = Path(complex_filepath).read_text().splitlines()
     simple_sents = Path(simple_filepath).read_text().splitlines()
 
+    # Use the specified percentage of the data
+    data_size = len(complex_sents)
+    selected_size = int(data_size * percentage)
+
+    # Randomly select the data subset
+    indices = list(range(data_size))
+    random.shuffle(indices)
+    selected_indices = indices[:selected_size]
+
+    complex_sents = [complex_sents[i] for i in selected_indices]
+    simple_sents = [simple_sents[i] for i in selected_indices]
+
     return complex_sents, simple_sents
+
 
 
 class BartModelEvaluator:
@@ -43,6 +59,7 @@ class BartModelEvaluator:
         self.tokenizer = tokenizer
         self.device = model_config['device']
         self.max_seq_length = model_config['max_seq_length']
+        self.output_location = model_config['output_dir']
 
     def generate_summary(self, sentence, max_length=256):
         """
@@ -121,6 +138,8 @@ class BartModelEvaluator:
         """
         return textstat.flesch_kincaid_grade(text)
 
+    import pandas as pd
+
     def evaluate(self, source_sentences, reference_sentences):
         """
         Evaluate a set of source and reference sentences using SARI, D-SARI, and FKGL metrics.
@@ -134,6 +153,7 @@ class BartModelEvaluator:
         """
         total_sari, total_d_sari, total_fkgl = 0, 0, 0
         predictions = []
+        metrics = []
 
         for i, source_sent in enumerate(source_sentences):
             try:
@@ -156,19 +176,34 @@ class BartModelEvaluator:
 
             # Calculate EASSE SARI and FKGL for this sample
             try:
-                easse_sari = easse_corpus_sari(orig_sents=[source_sent], sys_sents=[predicted_sent], refs_sents=[references])
+                easse_sari = easse_corpus_sari(orig_sents=[source_sent], sys_sents=[predicted_sent],
+                                               refs_sents=[references])
                 easse_fkgl = easse_corpus_fkgl([predicted_sent])
             except Exception as e:
                 print(f"Error calculating EASSE metrics for sample {i}: {e}")
                 easse_sari = 0
                 easse_fkgl = 0
 
+            # Print metrics for the sample
             print(f"Sample {i + 1}/{len(source_sentences)}")
             print(f"Source: {source_sent}")
             print(f"Predicted: {predicted_sent}")
             print(f"Reference: {references[0]}")
             print(f"SARI: {sari:.2f}, D-SARI: {d_sari:.2f}, FKGL: {fkgl:.2f}")
             print(f"EASSE SARI: {easse_sari:.2f}, EASSE FKGL: {easse_fkgl:.2f}\n")
+
+            # Store metrics in a dictionary for each sample
+            metrics.append({
+                'Sample': i + 1,
+                'Source': source_sent,
+                'Predicted': predicted_sent,
+                'Reference': references[0],
+                'SARI': sari,
+                'D-SARI': d_sari,
+                'FKGL': fkgl,
+                'EASSE SARI': easse_sari,
+                'EASSE FKGL': easse_fkgl
+            })
 
         # Calculate average scores
         avg_sari = total_sari / len(source_sentences)
@@ -191,10 +226,15 @@ class BartModelEvaluator:
         print(f"EASSE SARI: {easse_sari:.2f}")
         print(f"EASSE FKGL: {easse_fkgl:.2f}")
 
+        # Save metrics to a CSV file using pandas
+        df = pd.DataFrame(metrics)
+        df.to_csv('{}/evaluation_metrics_baseline.csv'.format(self.output_location), index=False)
+
         return {
             "SARI": avg_sari,
             "D-SARI": avg_d_sari,
             "FKGL": avg_fkgl,
             "EASSE SARI": easse_sari,
             "EASSE FKGL": easse_fkgl
-        }
+        }, df
+

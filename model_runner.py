@@ -10,6 +10,7 @@ from util.evaluate_model.simsum_evaluator import SumSimEvaluator
 from util.evaluate_model.evaluation_metrics import BartModelEvaluator, load_dataset
 from util.simsum_models.simsum_model import SumSimModel
 from util.baseline_models.baseline_model import Seq2SeqFineTunedModel
+from util.generate_plots import plot_average_loss, plot_metric_distributions, identify_files
 
 
 class ModelRunner:
@@ -31,7 +32,7 @@ class ModelRunner:
         self.model_config = configuration.copy()
 
         # Store the model locations
-        self.model_config['output_dir'] = create_experiment_dir(self.exp_dir)
+        self.model_config['output_dir'] = create_experiment_dir(self.exp_dir, self.model_config)
         self.model_config['data_location'] = self.repo_dir / 'datasets'
         self.model_config['device'] = torch.device("cuda" if torch.cuda.is_available() else "mps")
 
@@ -46,7 +47,7 @@ class ModelRunner:
         Function to select the model class and configure the settings based on the model name.
         """
         if self.model_name == 'bart-baseline':
-            self.model_config['model_name'] = 'Yale-LILY/brio-cnndm-uncased'
+            self.model_config['model_name'] = 'facebook/bart-base' # 'Yale-LILY/brio-cnndm-uncased'
             self.model_config['scheduler_type'] = 'linear'
         elif self.model_name == 't5-baseline':
             self.model_config['model_name'] = 't5-base'
@@ -105,6 +106,14 @@ class ModelRunner:
         dataset_name = self.model_config['dataset']
 
         print(f"Evaluating on {dataset_name}")
-        complex_sents, simple_sents = load_dataset(dataset_dir, dataset_name)
-        scores = evaluator.evaluate(complex_sents, simple_sents)
+        complex_sents, simple_sents = load_dataset(
+            dataset_dir, dataset_name, percentage=self.model_config['test_sample_size']
+        )
+        scores, score_table = evaluator.evaluate(complex_sents, simple_sents)
         print(f"Results for {dataset_name}: {scores}")
+
+        # Generate plots
+        files = identify_files(self.model_config['output_dir'])
+        plot_average_loss(self.model_config['output_dir'], files['training_log'], files['validation_log'])
+        plot_metric_distributions(self.model_config['output_dir'], files['evaluation_metrics'])
+

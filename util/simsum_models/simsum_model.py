@@ -11,6 +11,7 @@ from transformers import (
 from easse.sari import corpus_sari
 import torch
 import torch.nn as nn
+from util.utils import save_log
 
 
 class SumSimModel(pl.LightningModule):
@@ -49,7 +50,17 @@ class SumSimModel(pl.LightningModule):
         self.lambda_ = training_parameters.get('lambda_', 1)
         self.hidden_size = training_parameters.get('hidden_size', 1)
         self.w1 = training_parameters.get('w1', 1)
+        self.top_keywords = training_parameters['top_keywords']
+        self.div_score = training_parameters['div_score']
         self.prompting_strategy = training_parameters.get('prompting_strategy', 'kw_score')
+        with open('{}/{}_training_log.csv'.format(
+                self.training_parameters['output_dir'],
+                self.training_parameters['model_name']
+        ), 'w') as f: f.write('epoch,loss\n')
+        with open('{}/{}_validation_log.csv'.format(
+                self.training_parameters['output_dir'],
+                self.training_parameters['model_name']
+        ), 'w') as f: f.write('epoch,loss,sari\n')
 
         # Initialize summarizer and simplifier
         self.summarizer = AutoModelForSeq2SeqLM.from_pretrained(self.summarizer_model_name).to(self.device_name)
@@ -100,11 +111,13 @@ class SumSimModel(pl.LightningModule):
         targets = batch['target']
         labels[labels[:, :] == self.simplifier_tokenizer.pad_token_id] = -100
 
-        # Select the keyword prompting strategy based on training parameters
+        # Conditionally handle keyword prompting based on strategy
         if self.training_parameters.get('prompting_strategy') == 'kw_score':
-            prompt_source = [create_kw_score_prompt(text) for text in source]
+            prompt_source = [create_kw_score_prompt(text, self.top_keywords, self.div_score) for text in source]
+        elif self.training_parameters.get('prompting_strategy') == 'kw_sep':
+            prompt_source = [create_kw_sep_prompt(text, self.top_keywords, self.div_score) for text in source]
         else:
-            prompt_source = [create_kw_sep_prompt(text) for text in source]
+            prompt_source = source
 
         # Tokenize targets for the simplifier
         targets_encoding = self.simplifier_tokenizer(
@@ -184,25 +197,35 @@ class SumSimModel(pl.LightningModule):
             loss = sim_outputs.loss * self.training_parameters['w1']
             loss += (-self.training_parameters['lambda_'] * (sim_score.mean(dim=1).mean(dim=0)))
             self.log('train_loss', sim_outputs.loss, on_step=True, prog_bar=True, logger=True)
-            return loss
         else:
             loss = sim_outputs.loss
             self.log('train_loss', loss, on_step=True, prog_bar=True, logger=True)
-            return loss
+
+        # Save loss for each data point
+        save_log(
+            self.training_parameters['output_dir'],
+            self.training_parameters['model_name'],
+            self.current_epoch,
+            loss=loss.item(),
+            data_type='train'
+        )
+
+        return loss
 
     def validation_step(self, batch, batch_idx):
         """
-        Performs a validation step, computes loss, and logs the results.
+        Performs a validation step, computes and accumulates SARI scores, and logs the results.
 
         Args:
             batch (dict): Batch of validation data.
             batch_idx (int): Index of the current batch.
 
         Returns:
-            Tensor: Loss value for the current batch.
+            float: SARI score for the current batch.
         """
         loss = self.sari_validation_step(batch)
         self.log('val_loss', loss, batch_size=self.training_parameters['valid_batch_size'])
+
         return torch.tensor(loss, dtype=float)
 
     def sari_validation_step(self, batch):
@@ -251,8 +274,16 @@ class SumSimModel(pl.LightningModule):
 
         pred_sents = [generate(source) for source in batch["source"]]
         score = corpus_sari(batch["source"], pred_sents, [batch["targets"]])
-        print("Sari score: ", score)
-        return 1 - score / 100
+        loss = 1 - score / 100
+        save_log(
+            self.training_parameters['output_dir'],
+            self.training_parameters['model_name'],
+            self.current_epoch,
+            loss=loss,
+            sari=score,
+            data_type='validation'
+        )
+        return loss
 
     def configure_optimizers(self):
         """
@@ -303,7 +334,6 @@ class SumSimModel(pl.LightningModule):
             )
 
         return [optimizer], [{'scheduler': scheduler, 'interval': 'step', 'frequency': 1}]
-
 
     def save_core_model(self):
         """

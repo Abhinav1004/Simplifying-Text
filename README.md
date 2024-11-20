@@ -10,6 +10,11 @@ The required packages can be installed by
 pip install -r requirements.txt
 ```
 
+For Installing **Easse** 
+git clone https://github.com/feralvam/easse.git
+cd easse
+pip install -e .
+
 ## Processed Dataset
 The datasets used for document-level simplification are listed in `/SimSum/data` , named `D-Wiki` for D-Wikipedia and `wiki_doc` for WikiDoc.
 ![](/docs/figures/WechatIMG10.png)
