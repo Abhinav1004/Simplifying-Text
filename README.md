@@ -22,14 +22,17 @@ SimSum/
 │   ├── evaluate_model/         # Implementation for evaluation metrics
 │   ├── processing/              # Data processing implementation
 │   └── simsum_models/           # SimSum model implementation
+├── outputs/                 
+│   ├── exp_1234/         # logs files for experiment 1234
+│   └── ..../           
 ├── main.py                 # Entry point for training
 ├── generate_plots.py        # Script to generate plots for training and evaluation metrics
 ├── train_valid_data_generator.py   
 ├── utils.py                
-├── requirements.txt        # List of required packages
+├── requirements.txt                         # List of required packages
 ├── Simplifying_Text_Colab.ipynb             # Colab Training notebook 
-├── NLP_Project_Presentation_Final.pptx             # Presentation slides
-└── README.md               # Project documentation
+├── NLP_Project_Presentation_Final.pptx      # Presentation slides
+└── README.md                                # README file 
 
 ```
 
