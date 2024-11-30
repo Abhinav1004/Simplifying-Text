@@ -14,7 +14,7 @@ if __name__ == "__main__":
         'weight_decay': 0.0001,
         'warmup_steps': 5,
         'custom_loss': True, # [True,False]
-        'train_sample_size': 0.1,
+        'train_sample_size': 0.1, # Reduce the sample size to 0.001 for testing purposes
         'valid_sample_size': 0.1,
         'hidden_size': 1,
         'w1': 1,

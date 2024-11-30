@@ -38,7 +38,6 @@ Cython==3.0.11
 debugpy==1.8.8
 decorator==5.1.1
 defusedxml==0.7.1
--e git+https://github.com/feralvam/easse.git@6a4352ec299ed03fda8ee45445ca43d9c7673e89#egg=easse
 exceptiongroup==1.2.2
 executing==2.1.0
 fastjsonschema==2.20.0
@@ -195,7 +194,6 @@ tornado==6.4.1
 tqdm==4.67.0
 traitlets==5.14.3
 transformers==4.46.2
-tseval @ git+https://github.com/facebookresearch/text-simplification-evaluation.git@dea8863683ea5946fd50184883c9be7a7339e821
 typer==0.13.0
 types-python-dateutil==2.9.0.20241003
 typing_extensions==4.12.2
