@@ -1,5 +1,13 @@
 # SIMSUM: Document-level Text Simplification via Simultaneous Summarization
 
+## Problem Statement
+Develop an approach for Document Level Simplification which involves simplifying documents
+consisting of several sentences by rewriting them into fewer or more sentences. 
+Text simplification is an important technique that aims to simplify a document to make it more understandable 
+and accessible for people at different educational reading levels, while still retaining the content
+of the original text.
+
+
 ## Folder Structure
 ``` 
 SimSum/
@@ -45,3 +53,6 @@ SimSum/
 7. Please find the final presentation slides in  `docs/presentation_slides/NLP_Project_Presentation_Final.pptx`
 
 
+# Team Members
+Abhinav Kumar Jha (cs23mtech15001@iith.ac.in)   
+Shriram Pradeep (cs23mtech15020@iith.ac.in)
