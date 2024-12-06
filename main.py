@@ -13,22 +13,22 @@ if __name__ == "__main__":
         'adam_epsilon': 1e-8,
         'weight_decay': 0.0001,
         'warmup_steps': 5,
-        'custom_loss': True,
-        'train_sample_size': 0.1,
+        'custom_loss': True, # [True,False]
+        'train_sample_size': 0.1, # Reduce the sample size to 0.001 for testing purposes
         'valid_sample_size': 0.1,
         'hidden_size': 1,
         'w1': 1,
 
-        # To edit
-        'model_name': 'bart-simsum',
-        'dataset': 'wiki_doc',
+        # Edit the following parameters as per the requirement i.e dataset,model type,epochs,batch size etc.
+        'model_name': 'bart-simsum', # ['bart-baseline', 't5-baseline','bart-simsum', 't5-simsum']
+        'dataset': 'wiki_doc', # ['wiki_doc', 'd_wiki']
         'num_train_epochs': 10,
         'train_batch_size': 8,
         'valid_batch_size': 8,
-        'lambda_': 0.001,
-        'prompting_strategy': 'no_prompting',
-        'div_score': 0.5,
-        'top_keywords': 5,
+        'lambda_': 0.001, # for simsum loss function
+        'prompting_strategy': 'no_prompting', # ['no_prompting', 'kw_score']
+        'div_score': 0.5, # for 'kw_score' prompting_strategy
+        'top_keywords': 5, # for 'kw_score' prompting_strategy
         'test_sample_size': 0.2
     }
 
